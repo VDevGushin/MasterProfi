@@ -64,10 +64,11 @@ def _size(item: QuoteItem) -> tuple[str, str]:
     return f"{round(float(item.width_m or 0) * 1000)}×{round(float(item.height_m or 0) * 1000)}", "мм"
 
 
-def create_quote_pdf(source: Path, items: list[QuoteItem], config: dict[str, Any]) -> Path:
+def create_quote_pdf(source: Path, items: list[QuoteItem], config: dict[str, Any], output_dir: Path | None = None) -> Path:
     _register_fonts()
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    output = OUTPUT_DIR / f"КП_{source.stem}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
+    destination = output_dir or OUTPUT_DIR
+    destination.mkdir(parents=True, exist_ok=True)
+    output = destination / f"КП_{source.stem}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
     document = SimpleDocTemplate(
         str(output),
         pagesize=A4,

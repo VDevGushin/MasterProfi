@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -19,7 +20,10 @@ class QwenClient:
         total_batches = (len(records) + batch_size - 1) // batch_size
         for start in range(0, len(records), batch_size):
             batch = records[start:start + batch_size]
-            self.log(f"Qwen: разбираю пачку {start // batch_size + 1}/{total_batches} ({len(batch)} записей).")
+            self.log(
+                f"Qwen думает: разбираю пачку {start // batch_size + 1}/{total_batches} "
+                f"({len(batch)} записей)."
+            )
             parsed = self._extract_batch(batch, rag_context)
             if not parsed:
                 self.log("Qwen не ответил корректно; использую детерминированный разбор для оставшихся позиций.")
@@ -81,18 +85,25 @@ source_ref, name, quantity, width_m, height_m, area_m2, system, fabric, color, o
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
+        started_at = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=int(self.settings.get("timeout_seconds", 8))) as response:
                 content = json.loads(response.read().decode("utf-8"))["message"]["content"]
             parsed = json.loads(content)
+            elapsed = time.monotonic() - started_at
             if isinstance(parsed, dict) and isinstance(parsed.get("items"), list):
+                self.log(f"Qwen ответил за {elapsed:.1f} с: получено {len(parsed['items'])} позиций.")
                 return parsed["items"]
             if isinstance(parsed, list):
+                self.log(f"Qwen ответил за {elapsed:.1f} с: получено {len(parsed)} позиций.")
                 return parsed
             # Совместимость с одиночным объектом у старых версий Ollama.
             if isinstance(parsed, dict) and parsed.get("source_ref"):
+                self.log(f"Qwen ответил за {elapsed:.1f} с: получена 1 позиция.")
                 return [parsed]
+            self.log(f"Qwen ответил за {elapsed:.1f} с, но не вернул пригодных позиций.")
             return []
         except (urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError) as error:
-            self.log(f"Qwen недоступен или вернул ошибку: {error}")
+            elapsed = time.monotonic() - started_at
+            self.log(f"Qwen не ответил за {elapsed:.1f} с или вернул ошибку: {error}")
             return []
