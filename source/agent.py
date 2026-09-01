@@ -93,8 +93,8 @@ def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any],
         lines.extend(["", "ИСКЛЮЧЕННЫЕ ПОЗИЦИИ"])
         for item in invalid:
             lines.append(f"- {item.name}: {item.note}.")
-    if dialogue and dialogue.get("answer"):
-        lines.extend(["", "ОТВЕТ ПОЛЬЗОВАТЕЛЯ", str(dialogue["answer"])])
+    if dialogue and dialogue.get("selected"):
+        lines.extend(["", "ВЫБОР ПОЛЬЗОВАТЕЛЯ", str(dialogue["selected"].get("label", ""))])
     lines.extend([
         "",
         "После уточнения перезапустите агента. Исходное ТЗ остаётся в папке input.",

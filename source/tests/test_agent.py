@@ -2,7 +2,7 @@ from pathlib import Path
 
 from source.config import ROOT, load_agent_config, load_qwen_config
 from source.agent import requires_review_text
-from source.dialogue import apply_supported_answer
+from source.dialogue import apply_supported_choice, build_options
 from source.knowledge import KnowledgeBase, initialize_knowledge
 from source.parser import extract_records, parse_tz
 from source.qwen import QwenClient
@@ -127,7 +127,7 @@ def test_mounting_profile_is_not_installation_service() -> None:
     assert _contains_temporary_service("Монтаж изделий — 1 услуга") == "монтаж"
 
 
-def test_user_can_confirm_safe_angular_amg_rule() -> None:
+def test_user_can_choose_safe_angular_amg_rule() -> None:
     agent_config = load_agent_config()
     db = KnowledgeBase()
     try:
@@ -139,7 +139,9 @@ def test_user_can_confirm_safe_angular_amg_rule() -> None:
         )
         _, unresolved, _ = price_items(items, agent_config, db, logger=silent)
         assert len(unresolved) == 1
-        assert apply_supported_answer(unresolved, "1") == 1
+        options = build_options(unresolved)
+        assert [option["key"] for option in options] == ["angular_regular_amg", "defer"]
+        assert apply_supported_choice(unresolved, options[0]["key"]) == 1
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 10
         assert not unresolved
@@ -155,5 +157,5 @@ if __name__ == "__main__":
     test_procurement_docx_requires_only_angular_rule()
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
-    test_user_can_confirm_safe_angular_amg_rule()
+    test_user_can_choose_safe_angular_amg_rule()
     print("OK")
