@@ -1,9 +1,11 @@
 from pathlib import Path
+from datetime import datetime
 
 from source.config import ROOT, load_agent_config, load_qwen_config
 from source.agent import requires_review_text
 from source.dialogue import apply_supported_choice, build_options
 from source.knowledge import KnowledgeBase, initialize_knowledge
+from source.naming import job_folder_name, quote_filename, slug
 from source.parser import extract_records, parse_tz
 from source.qwen import QwenClient
 from source.reviewer import _contains_temporary_service
@@ -127,6 +129,15 @@ def test_mounting_profile_is_not_installation_service() -> None:
     assert _contains_temporary_service("Монтаж изделий — 1 услуга") == "монтаж"
 
 
+def test_human_readable_result_names() -> None:
+    source = Path("ТЗ_рулонные шторы 2026 (2) (1).docx")
+    assert slug(source.stem) == "ТЗ-рулонные-шторы-2026-2-1"
+    assert job_folder_name(source, datetime(2026, 9, 1, 21, 20), "66fe9f") == (
+        "2026-09-01_21-20_ТЗ-рулонные-шторы-2026-2-1_66fe9f"
+    )
+    assert quote_filename(source) == "КП_ТЗ-рулонные-шторы-2026-2-1.pdf"
+
+
 def test_user_can_choose_safe_angular_amg_rule() -> None:
     agent_config = load_agent_config()
     db = KnowledgeBase()
@@ -157,5 +168,6 @@ if __name__ == "__main__":
     test_procurement_docx_requires_only_angular_rule()
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
+    test_human_readable_result_names()
     test_user_can_choose_safe_angular_amg_rule()
     print("OK")

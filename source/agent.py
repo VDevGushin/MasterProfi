@@ -11,6 +11,7 @@ from typing import Any
 from .config import INPUT_DIR, OUTPUT_DIR, TASKS_DIR
 from .dialogue import ask_user
 from .knowledge import KnowledgeBase, initialize_knowledge
+from .naming import job_folder_name
 from .parser import parse_tz
 from .pdf_renderer import create_quote_pdf
 from .qwen import QwenClient
@@ -24,12 +25,12 @@ def log(message: str) -> None:
 
 class TaskContext:
     def __init__(self, source: Path) -> None:
-        safe = "".join(char if char.isalnum() or char in "_-" else "_" for char in source.stem).strip("_")
-        self.path = TASKS_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe}_{uuid.uuid4().hex[:6]}"
+        created_at = datetime.now()
+        self.path = TASKS_DIR / job_folder_name(source, created_at, uuid.uuid4().hex[:6])
         self.path.mkdir(parents=True, exist_ok=False)
         self.output_dir = OUTPUT_DIR / self.path.name
         self.output_dir.mkdir(parents=True, exist_ok=False)
-        self.save("task.json", {"source": source.name, "created_at": datetime.now().isoformat()})
+        self.save("task.json", {"source": source.name, "created_at": created_at.isoformat()})
 
     def save(self, name: str, payload: Any) -> None:
         (self.path / name).write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
