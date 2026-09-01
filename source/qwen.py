@@ -31,6 +31,48 @@ class QwenClient:
             result.extend(parsed)
         return result
 
+    def clarification_question(self, unresolved: list[dict[str, Any]], fallback: str) -> str:
+        """Ask Qwen to phrase a short question, never to decide a price or a rule."""
+        prompt = (
+            "Сформулируй один короткий и вежливый вопрос менеджеру по позициям ТЗ. "
+            "Не придумывай цену, наценку, систему или аналог. Если есть явно предложенные варианты, "
+            "сохрани их в вопросе. Верни только текст вопроса на русском.\n\n"
+            "Позиции без правила:\n" + json.dumps(unresolved, ensure_ascii=False) + "\n\n"
+            "Безопасный вариант вопроса, который можно использовать дословно:\n" + fallback
+        )
+        payload = {
+            "model": self.settings["model"],
+            "stream": False,
+            "think": bool(self.settings.get("think", False)),
+            "messages": [
+                {"role": "system", "content": "Ты помогаешь сформулировать вопрос. Не принимай решений за человека."},
+                {"role": "user", "content": prompt},
+            ],
+            "options": {
+                "temperature": 0,
+                "num_ctx": min(2048, int(self.settings.get("num_ctx", 4096))),
+                "num_predict": 200,
+            },
+        }
+        request = urllib.request.Request(
+            self.settings["url"],
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        started_at = time.monotonic()
+        self.log("Qwen думает: формулирую вопрос для пользователя.")
+        try:
+            with urllib.request.urlopen(request, timeout=int(self.settings.get("timeout_seconds", 8))) as response:
+                content = json.loads(response.read().decode("utf-8"))["message"]["content"].strip()
+            elapsed = time.monotonic() - started_at
+            if content:
+                self.log(f"Qwen сформулировал вопрос за {elapsed:.1f} с.")
+                return content
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError) as error:
+            elapsed = time.monotonic() - started_at
+            self.log(f"Qwen не смог сформулировать вопрос за {elapsed:.1f} с: {error}")
+        return fallback
+
     def _extract_batch(self, records: list[dict[str, Any]], rag_context: str) -> list[dict[str, Any]]:
         prompt = """Извлеки позиции ТЗ для расчёта солнцезащитных систем.
 Верни JSON-объект с единственным полем items — массивом позиций. Поля каждой позиции:
