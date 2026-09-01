@@ -104,6 +104,9 @@ def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any],
 
 
 def _write_review_reports(context: TaskContext, report: dict[str, Any], text: str) -> tuple[Path, Path]:
+    # Папку output могут очистить вручную, пока агент рассчитывает ТЗ.
+    # В этом случае отчёт всё равно обязан сохраниться.
+    context.output_dir.mkdir(parents=True, exist_ok=True)
     text_path, json_path = _review_report_paths(context)
     text_path.write_text(text, encoding="utf-8")
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

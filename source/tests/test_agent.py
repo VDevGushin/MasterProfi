@@ -1,8 +1,10 @@
 from pathlib import Path
 from datetime import datetime
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 from source.config import ROOT, load_agent_config, load_qwen_config
-from source.agent import requires_review_text
+from source.agent import _write_review_reports, requires_review_text
 from source.dialogue import apply_supported_choice, build_options
 from source.knowledge import KnowledgeBase, initialize_knowledge
 from source.naming import job_folder_name, quote_filename, slug
@@ -138,6 +140,15 @@ def test_human_readable_result_names() -> None:
     assert quote_filename(source) == "КП_ТЗ-рулонные-шторы-2026-2-1.pdf"
 
 
+def test_report_folder_is_recreated_if_removed_during_calculation() -> None:
+    with TemporaryDirectory() as temporary:
+        output_dir = Path(temporary) / "result"
+        context = SimpleNamespace(output_dir=output_dir)
+        text_path, json_path = _write_review_reports(context, {"status": "requires_review"}, "Нужно уточнение\n")
+        assert text_path.read_text(encoding="utf-8") == "Нужно уточнение\n"
+        assert json_path.exists()
+
+
 def test_user_can_choose_safe_angular_amg_rule() -> None:
     agent_config = load_agent_config()
     db = KnowledgeBase()
@@ -169,5 +180,6 @@ if __name__ == "__main__":
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
     test_human_readable_result_names()
+    test_report_folder_is_recreated_if_removed_during_calculation()
     test_user_can_choose_safe_angular_amg_rule()
     print("OK")
