@@ -74,47 +74,16 @@ class KnowledgeBase:
         self.connection.close()
 
 
-def _simple_yaml_list(path: Path, section: str) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    result: list[dict[str, Any]] = []
-    current: dict[str, Any] | None = None
-    active = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not line.startswith((" ", "\t")) and stripped.endswith(":"):
-            if current and active:
-                result.append(current)
-            current = None
-            active = stripped[:-1] == section
-            continue
-        if not active:
-            continue
-        if stripped.startswith("- "):
-            if current:
-                result.append(current)
-            current = {}
-            stripped = stripped[2:]
-        if current is None or ":" not in stripped:
-            continue
-        key, raw = stripped.split(":", 1)
-        value: Any = raw.strip().strip('"').strip("'")
-        if str(value).lower() in {"true", "false"}:
-            value = str(value).lower() == "true"
-        current[key.strip()] = value
-    if current and active:
-        result.append(current)
-    return result
-
-
 def load_verified_analogues(db: KnowledgeBase) -> int:
     count = 0
-    for item in _simple_yaml_list(COMPETITORS_CONFIG, "analogs"):
+    if not COMPETITORS_CONFIG.exists():
+        return count
+    with COMPETITORS_CONFIG.open("rb") as stream:
+        analogues = tomllib.load(stream).get("analogue", [])
+    for item in analogues:
         if not item.get("verified") or not item.get("source_material"):
             continue
-        db.put("analogue", str(item["source_material"]), item, "source/knowledge/competitors.yaml", float(item.get("confidence", 1.0)), True)
+        db.put("analogue", str(item["source_material"]), item, "config/competitors.toml", float(item.get("confidence", 1.0)), True)
         count += 1
     return count
 

@@ -32,8 +32,8 @@ python3 -m venv .venv
 - `source/qwen.py` — клиент локальной Qwen;
 - `source/knowledge.py` — SQLite/RAG, аналоги и источники конкурентов;
 - `source/reviewer.py` — независимая проверка КП;
-- `source/config/` — прокомментированные настройки TOML;
-- `source/knowledge/` — редактируемая база знаний.
+- `config/` — прокомментированные настройки TOML, включая аналоги конкурентов;
+- `source/knowledge/` — техническая локальная база RAG/SQLite.
 
 ## Безопасность расчёта
 
