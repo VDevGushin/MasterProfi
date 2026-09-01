@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from .models import QuoteItem
 from .qwen import QwenClient
+from .terminal_menu import choose_option
 
 
 def _is_angular_amg(item: QuoteItem) -> bool:
@@ -56,23 +57,14 @@ def ask_user(
     question = qwen.clarification_question([asdict(item) for item in unresolved], fallback)
     print("\n--- Уточнение от Qwen ---", flush=True)
     print(question, flush=True)
-    for number, option in enumerate(options, 1):
-        print(f"{number}. {option['label']}", flush=True)
-
-    while True:
-        try:
-            selected = reader(f"Выберите вариант 1–{len(options)} (Enter — отменить): ").strip()
-        except (EOFError, KeyboardInterrupt):
-            selected = ""
-        if not selected:
-            logger("Пользователь отменил выбор; оставляю ТЗ на уточнении.")
-            return {"question": question, "options": options, "selected": None, "resolved_count": 0}
-        if selected.isdigit() and 1 <= int(selected) <= len(options):
-            choice = options[int(selected) - 1]
-            resolved_count = apply_supported_choice(unresolved, choice["key"])
-            logger(f"Выбран вариант {selected}: {choice['label']}")
-            return {"question": question, "options": options, "selected": choice, "resolved_count": resolved_count}
-        print(f"Введите только номер от 1 до {len(options)}.", flush=True)
+    selected_index = choose_option([option["label"] for option in options])
+    if selected_index is None:
+        logger("Пользователь отменил выбор; оставляю ТЗ на уточнении.")
+        return {"question": question, "options": options, "selected": None, "resolved_count": 0}
+    choice = options[selected_index]
+    resolved_count = apply_supported_choice(unresolved, choice["key"])
+    logger(f"Выбран вариант {selected_index + 1}: {choice['label']}")
+    return {"question": question, "options": options, "selected": choice, "resolved_count": resolved_count}
 
 
 def apply_supported_choice(unresolved: list[QuoteItem], choice_key: str) -> int:
