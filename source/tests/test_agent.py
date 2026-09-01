@@ -2,6 +2,7 @@ from pathlib import Path
 
 from source.config import ROOT, load_agent_config, load_qwen_config
 from source.agent import requires_review_text
+from source.dialogue import apply_supported_answer
 from source.knowledge import KnowledgeBase, initialize_knowledge
 from source.parser import extract_records, parse_tz
 from source.qwen import QwenClient
@@ -126,6 +127,27 @@ def test_mounting_profile_is_not_installation_service() -> None:
     assert _contains_temporary_service("Монтаж изделий — 1 услуга") == "монтаж"
 
 
+def test_user_can_confirm_safe_angular_amg_rule() -> None:
+    agent_config = load_agent_config()
+    db = KnowledgeBase()
+    try:
+        initialize_knowledge(db)
+        items = parse_tz(
+            ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx",
+            QwenClient({**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}, logger=silent),
+            db,
+        )
+        _, unresolved, _ = price_items(items, agent_config, db, logger=silent)
+        assert len(unresolved) == 1
+        assert apply_supported_answer(unresolved, "1") == 1
+        priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
+        assert len(priced) == 10
+        assert not unresolved
+        assert not invalid
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     test_format_extractors()
     test_pricing_without_delivery_or_installation()
@@ -133,4 +155,5 @@ if __name__ == "__main__":
     test_procurement_docx_requires_only_angular_rule()
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
+    test_user_can_confirm_safe_angular_amg_rule()
     print("OK")

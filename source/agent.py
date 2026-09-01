@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import INPUT_DIR, OUTPUT_DIR, TASKS_DIR
+from .dialogue import ask_user
 from .knowledge import KnowledgeBase, initialize_knowledge
 from .parser import parse_tz
 from .pdf_renderer import create_quote_pdf
@@ -66,7 +67,7 @@ def _required_action(item: Any) -> str:
     return "Добавьте или подтвердите правило расчёта для этой позиции."
 
 
-def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any], invalid: list[Any]) -> str:
+def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any], invalid: list[Any], dialogue: dict[str, Any] | None = None) -> str:
     lines = [
         "КП НЕ СФОРМИРОВАНО: ТРЕБУЕТСЯ УТОЧНЕНИЕ",
         "",
@@ -92,6 +93,8 @@ def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any],
         lines.extend(["", "ИСКЛЮЧЕННЫЕ ПОЗИЦИИ"])
         for item in invalid:
             lines.append(f"- {item.name}: {item.note}.")
+    if dialogue and dialogue.get("answer"):
+        lines.extend(["", "ОТВЕТ ПОЛЬЗОВАТЕЛЯ", str(dialogue["answer"])])
     lines.extend([
         "",
         "После уточнения перезапустите агента. Исходное ТЗ остаётся в папке input.",
@@ -123,6 +126,20 @@ def process_file(path: Path, agent_config: dict[str, Any], qwen_config: dict[str
             "unresolved": [asdict(item) for item in unresolved],
             "invalid": [asdict(item) for item in invalid],
         })
+        dialogue = None
+        if unresolved and path.parent.resolve() == INPUT_DIR.resolve() and agent_config.get("interactive_clarifications", True):
+            dialogue = ask_user(unresolved, qwen, log)
+            if dialogue:
+                context.save("clarification_dialogue.json", dialogue)
+                if dialogue["resolved_count"]:
+                    log(f"Применено подтверждённых решений: {dialogue['resolved_count']}. Пересчитываю ТЗ.")
+                    priced, unresolved, invalid = price_items(items, agent_config, db, logger=log)
+                    context.save("calculation.json", {
+                        "priced": [asdict(item) for item in priced],
+                        "unresolved": [asdict(item) for item in unresolved],
+                        "invalid": [asdict(item) for item in invalid],
+                    })
+
         if unresolved or not priced:
             report = {
                 "status": "requires_review",
@@ -131,7 +148,7 @@ def process_file(path: Path, agent_config: dict[str, Any], qwen_config: dict[str
                 "unresolved": [asdict(item) for item in unresolved],
                 "invalid": [asdict(item) for item in invalid],
             }
-            text_path, _ = _write_review_reports(context, report, requires_review_text(path, priced, unresolved, invalid))
+            text_path, _ = _write_review_reports(context, report, requires_review_text(path, priced, unresolved, invalid, dialogue))
             context.save("result.json", report)
             log("КП не создано: требуется проверенное ценовое правило. Исходное ТЗ сохранено.")
             log(f"Понятный отчёт для менеджера: {text_path.relative_to(OUTPUT_DIR.parent)}")
