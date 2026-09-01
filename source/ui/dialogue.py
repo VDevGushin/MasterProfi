@@ -4,8 +4,8 @@ import sys
 from dataclasses import asdict
 from typing import Any, Callable
 
-from .models import QuoteItem
-from .qwen import QwenClient
+from ..agent.llm import QwenClient
+from ..core.models import QuoteItem
 from .terminal_menu import choose_option
 
 
@@ -43,7 +43,6 @@ def ask_user(
     unresolved: list[QuoteItem],
     qwen: QwenClient,
     logger: Callable[[str], None],
-    reader: Callable[[str], str] = input,
 ) -> dict[str, Any] | None:
     """Conduct one terminal clarification without letting the model invent a price rule."""
     if not sys.stdin.isatty():

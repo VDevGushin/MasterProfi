@@ -6,6 +6,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .prompt import CLARIFICATION_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT
+
 
 class QwenClient:
     def __init__(self, settings: dict[str, Any], logger=print) -> None:
@@ -45,7 +47,7 @@ class QwenClient:
             "stream": False,
             "think": bool(self.settings.get("think", False)),
             "messages": [
-                {"role": "system", "content": "Ты помогаешь сформулировать вопрос. Не принимай решений за человека."},
+                {"role": "system", "content": CLARIFICATION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             "options": {
@@ -113,7 +115,7 @@ source_ref, name, quantity, width_m, height_m, area_m2, system, fabric, color, o
             },
             "think": bool(self.settings.get("think", False)),
             "messages": [
-                {"role": "system", "content": "Ты извлекаешь факты из ТЗ. Отвечай строго JSON без пояснений."},
+                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             "options": {

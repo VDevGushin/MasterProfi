@@ -14,7 +14,7 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from .config import COMPETITORS_CONFIG, COMPETITOR_SOURCES, EXAMPLES_DIR, KNOWLEDGE_DB, KNOWLEDGE_DIR, REFERENCE_QUOTES_DIR
+from ..core.config import COMPETITORS_CONFIG, COMPETITOR_SOURCES, EXAMPLES_DIR, KNOWLEDGE_DB, KNOWLEDGE_DIR, REFERENCE_QUOTES_DIR
 
 
 def normalize(value: Any) -> str:

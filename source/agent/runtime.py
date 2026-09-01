@@ -8,15 +8,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .config import INPUT_DIR, OUTPUT_DIR, TASKS_DIR
-from .dialogue import ask_user
-from .knowledge import KnowledgeBase, initialize_knowledge
-from .naming import job_folder_name
-from .parser import parse_tz
-from .pdf_renderer import create_quote_pdf
-from .qwen import QwenClient
-from .reviewer import review_quote
-from .tools import price_items
+from ..core.config import INPUT_DIR, OUTPUT_DIR, TASKS_DIR
+from ..core.naming import job_folder_name
+from ..memory.knowledge import KnowledgeBase, initialize_knowledge
+from ..tools.pdf import create_quote_pdf
+from ..tools.pricing import price_items
+from ..tools.reviewer import review_quote
+from ..tools.tz_parser import parse_tz
+from ..ui.dialogue import ask_user
+from .llm import QwenClient
 
 
 def log(message: str) -> None:

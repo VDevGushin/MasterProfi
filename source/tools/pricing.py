@@ -8,9 +8,9 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from .config import DATA_DIR
-from .knowledge import KnowledgeBase, normalize, normalize_key
-from .models import QuoteItem
+from ..core.config import DATA_DIR
+from ..core.models import QuoteItem
+from ..memory.knowledge import KnowledgeBase, normalize, normalize_key
 
 
 def local_price_file() -> Path:

@@ -5,7 +5,7 @@ from typing import Any
 
 import pdfplumber
 
-from .models import QuoteItem, ReviewResult
+from ..core.models import QuoteItem, ReviewResult
 
 
 FORBIDDEN_TEMPORARY_TERMS = ("скидка", "доставка", "установка")

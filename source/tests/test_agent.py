@@ -3,15 +3,16 @@ from datetime import datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-from source.config import ROOT, load_agent_config, load_qwen_config
-from source.agent import _write_review_reports, requires_review_text
-from source.dialogue import apply_supported_choice, build_options
-from source.knowledge import KnowledgeBase, initialize_knowledge
-from source.naming import job_folder_name, quote_filename, slug
-from source.parser import extract_records, parse_tz
-from source.qwen import QwenClient
-from source.reviewer import _contains_temporary_service
-from source.tools import price_items
+from source.agent.llm import QwenClient
+from source.agent.router import select_skill
+from source.agent.runtime import _write_review_reports, requires_review_text
+from source.core.config import ROOT, load_agent_config, load_qwen_config
+from source.core.naming import job_folder_name, quote_filename, slug
+from source.memory.knowledge import KnowledgeBase, initialize_knowledge
+from source.tools.pricing import price_items
+from source.tools.reviewer import _contains_temporary_service
+from source.tools.tz_parser import extract_records, parse_tz
+from source.ui.dialogue import apply_supported_choice, build_options
 
 
 def silent(*_args, **_kwargs):
@@ -140,6 +141,16 @@ def test_human_readable_result_names() -> None:
     assert quote_filename(source) == "КП_ТЗ-рулонные-шторы-2026-2-1.pdf"
 
 
+def test_router_accepts_only_supported_tz_formats() -> None:
+    assert select_skill(Path("ТЗ.docx")) == "make_proposal"
+    try:
+        select_skill(Path("ТЗ.txt"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Router должен отклонять неподдерживаемый формат")
+
+
 def test_report_folder_is_recreated_if_removed_during_calculation() -> None:
     with TemporaryDirectory() as temporary:
         output_dir = Path(temporary) / "result"
@@ -180,6 +191,7 @@ if __name__ == "__main__":
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
     test_human_readable_result_names()
+    test_router_accepts_only_supported_tz_formats()
     test_report_folder_is_recreated_if_removed_during_calculation()
     test_user_can_choose_safe_angular_amg_rule()
     print("OK")
