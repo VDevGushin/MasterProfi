@@ -117,27 +117,36 @@ def _matrix_price_cached(price_path_str: str, _price_version: int, sheet_name: s
 
 
 def vertical_price(price_path: Path, item: QuoteItem, usd_rub_rate: float) -> tuple[int | None, str | None, str]:
-    query = normalize_key(f"{item.name} {item.fabric}")
+    query = normalize_key(f"{item.name} {item.fabric}").replace("O", "О")
     if "ЖАЛЮЗИ" not in query or item.area_m2 is None:
         return None, None, ""
     if "СТЕНОВ" in query and "КРОНШТЕЙН" in query:
         return 0, "комплектация", "Подтверждённый прецедент: ПримерыКП / КП АО «Трансинжстрой» / стеновые кронштейны без доплаты"
     sheet = load_workbook(price_path, data_only=True, read_only=True)["Вертикальные"]
+    matches: list[tuple[int, int, float, str]] = []
     for row in range(7, 13):
         collections = normalize_key(sheet.cell(row, 2).value)
         rate = sheet.cell(row, 6).value
         category = normalize(sheet.cell(row, 7).value).upper()
         if not isinstance(rate, (int, float)):
             continue
-        names = []
+        score = 0
         for raw_name in re.split(r"[,;]", collections):
-            name = re.sub(r"\bII\b", "", normalize_key(raw_name)).strip()
-            if len(name) >= 4:
-                names.append(name)
-        if not any(name in query or query in name for name in names):
-            continue
+            name = re.sub(r"\bII\b", "", normalize_key(raw_name)).replace("O", "О").strip()
+            if len(name) >= 4 and name in query:
+                score = max(score, 100 + len(name.split()))
+            # В прайсе некоторые названия объединены в одной длинной ячейке
+            # («... серый МАЛЬТА»). Ищем отдельное название, но даём ему
+            # меньший приоритет, чем точному совпадению полной фразы.
+            for token in re.findall(r"[А-ЯA-ZЁ]{4,}", name):
+                if token in query:
+                    score = max(score, len(token))
+        if score:
+            matches.append((score, row, float(rate), category))
+    if matches:
+        _, row, rate, category = max(matches)
         billable_area = max(1.0, float(item.area_m2))
-        price = round(billable_area * float(rate) * usd_rub_rate)
+        price = round(billable_area * rate * usd_rub_rate)
         source = f"{price_path.name} / Вертикальные / строка {row} / категория {category} / {rate:.4f} $/м² / курс {usd_rub_rate} руб."
         return price, category, source
     return None, None, ""
@@ -237,10 +246,14 @@ def price_items(items: list[QuoteItem], config: dict[str, Any], db: KnowledgeBas
             priced.append(item)
             logger(f"{item.source_ref}: электрика, {accessory} руб./ед.")
             continue
-        if item.area_m2 and not (item.width_m and item.height_m):
+        is_vertical = "ВЕРТИКАЛ" in normalize_key(item.name)
+        if is_vertical:
+            if item.area_m2 is None and item.width_m and item.height_m:
+                item.area_m2 = float(item.width_m) * float(item.height_m)
+        if is_vertical or (item.area_m2 and not (item.width_m and item.height_m)):
             price, category, provenance = vertical_price(price_path, item, float(config["usd_rub_rate"]))
             if price is None:
-                item.note = "Площадь распознана, но для этой позиции нет проверенного правила цены за м²"
+                item.note = "Для вертикальных жалюзи нет проверенного правила цены за м²"
                 unresolved.append(item)
                 continue
             item.price_rub = price

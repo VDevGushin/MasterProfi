@@ -16,6 +16,8 @@ QUANTITY_MARKERS = ("кол-во", "количество", "количеств")
 WIDTH_MARKERS = ("ширина", "шир.")
 HEIGHT_MARKERS = ("высота", "выс.")
 AREA_MARKERS = ("площадь", "м2", "м²")
+MATERIAL_MARKERS = ("материал", "ткань")
+OPACITY_MARKERS = ("прозрачность", "затемнение")
 
 
 def _number(value: Any) -> float | None:
@@ -62,6 +64,15 @@ def _header_index(values: list[Any], markers: tuple[str, ...]) -> int | None:
     return None
 
 
+def _material_index(values: list[Any]) -> int | None:
+    """Find a fabric column without confusing it with 'прозрачность материала'."""
+    for index, value in enumerate(values):
+        text = normalize(value).lower()
+        if any(marker in text for marker in MATERIAL_MARKERS) and not any(marker in text for marker in OPACITY_MARKERS):
+            return index
+    return None
+
+
 def _record(ref: str, name: Any, quantity: Any, width: Any = None, height: Any = None, area: Any = None, dimensions: Any = None) -> dict[str, Any] | None:
     title = normalize(name)
     if not title:
@@ -94,22 +105,42 @@ def _xlsx_records(path: Path) -> list[dict[str, Any]]:
                 "width": _header_index(values, WIDTH_MARKERS),
                 "height": _header_index(values, HEIGHT_MARKERS),
                 "area": _header_index(values, AREA_MARKERS),
+                "material": _material_index(values),
+                "opacity": _header_index(values, OPACITY_MARKERS),
             }
             break
     result: list[dict[str, Any]] = []
     if header_row is not None:
+        inherited = {"name": "", "fabric": "", "opacity": ""}
         for row_index, values in enumerate(rows[header_row + 1:], start=header_row + 2):
-            name = values[indexes["name"]] if indexes["name"] is not None else None
+            explicit_name = normalize(values[indexes["name"]]) if indexes["name"] is not None else ""
+            if explicit_name:
+                if explicit_name != inherited["name"]:
+                    inherited["fabric"] = ""
+                    inherited["opacity"] = ""
+                inherited["name"] = explicit_name
+            material = normalize(values[indexes["material"]]) if indexes["material"] is not None else ""
+            opacity = normalize(values[indexes["opacity"]]) if indexes["opacity"] is not None else ""
+            if material:
+                inherited["fabric"] = material
+            if opacity:
+                inherited["opacity"] = opacity
             qty = values[indexes["quantity"]] if indexes["quantity"] is not None else None
             dimension_text = " ".join(normalize(value) for value in values if value not in (None, ""))
             item = _record(
-                f"xlsx:{row_index}", name, qty,
+                f"xlsx:{row_index}", inherited["name"], qty,
                 values[indexes["width"]] if indexes["width"] is not None else None,
                 values[indexes["height"]] if indexes["height"] is not None else None,
                 values[indexes["area"]] if indexes["area"] is not None else None,
                 dimension_text,
             )
             if item and item["quantity"]:
+                item.update({
+                    "fabric": inherited["fabric"],
+                    "opacity": inherited["opacity"],
+                    "structured": True,
+                    "inherited_name": not bool(explicit_name),
+                })
                 result.append(item)
     if result:
         return result
@@ -369,6 +400,8 @@ def extract_records(path: Path) -> list[dict[str, Any]]:
 def _infer_product_fields(name: str) -> dict[str, Any]:
     lower = name.lower()
     system = next((item for item in ("Стандарт", "Мини", "AMG", "UNI 1", "UNI 2") if item.lower() in lower), "")
+    if "амг" in lower:
+        system = "AMG"
     opacity = "Блэкаут" if "блэкаут" in lower or "blackout" in lower or "непрозрач" in lower else "Полупрозрачная"
     split_match = re.search(r"раздел\w*\s+на\s+(\d+)", lower)
     split = int(split_match.group(1)) if split_match else 1
@@ -384,6 +417,8 @@ def _infer_product_fields(name: str) -> dict[str, Any]:
 
 
 def _needs_qwen(record: dict[str, Any]) -> bool:
+    if record.get("structured"):
+        return False
     name = normalize(record.get("name"))
     if "нет замер" in normalize(record.get("raw_text")).lower():
         return False

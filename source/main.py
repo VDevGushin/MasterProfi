@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from .agent import log, process_file
 from .agent.router import SUPPORTED_TZ_SUFFIXES, select_skill
+from .agent.runtime import log, process_file
 from .core.config import INPUT_DIR, OUTPUT_DIR, TASKS_DIR, load_agent_config, load_qwen_config
 
 

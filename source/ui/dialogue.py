@@ -53,6 +53,9 @@ def ask_user(
         "Какое подтверждённое правило нужно применить к указанным позициям?"
     )
     options = build_options(unresolved)
+    if len(options) == 1 and options[0]["key"] == "defer":
+        logger("Нет безопасного варианта выбора; формирую отчёт для специалиста без запроса Qwen.")
+        return None
     question = qwen.clarification_question([asdict(item) for item in unresolved], fallback)
     print("\n--- Уточнение от Qwen ---", flush=True)
     print(question, flush=True)

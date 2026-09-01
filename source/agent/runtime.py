@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
+from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -78,7 +79,36 @@ def requires_review_text(source: Path, priced: list[Any], unresolved: list[Any],
         f"Исключено без размеров: {len(invalid)}.",
         "",
     ]
-    if unresolved:
+    if len(unresolved) > 12:
+        lines.append("ГРУППЫ ПОЗИЦИЙ, ТРЕБУЮЩИЕ РЕШЕНИЯ")
+        groups: dict[tuple[str, str], list[Any]] = defaultdict(list)
+        for item in unresolved:
+            groups[(item.name, item.note)].append(item)
+        for index, ((name, note), group) in enumerate(groups.items(), 1):
+            materials = list(dict.fromkeys(item.fabric for item in group if item.fabric))
+            sizes = list(dict.fromkeys(_item_size_for_report(item) for item in group))
+            references = [item.source_ref for item in group]
+            material_text = ", ".join(materials[:4]) or "не указаны"
+            if len(materials) > 4:
+                material_text += f" и ещё {len(materials) - 4}"
+            size_text = ", ".join(sizes[:3]) or "не указаны"
+            if len(sizes) > 3:
+                size_text += f" и ещё {len(sizes) - 3}"
+            reference_text = ", ".join(references[:8])
+            if len(references) > 8:
+                reference_text += f" и ещё {len(references) - 8}"
+            lines.extend([
+                "",
+                f"{index}. {name}",
+                f"   Строк ТЗ: {len(group)}; всего изделий: {sum(item.quantity for item in group)} шт.",
+                f"   Материалы: {material_text}.",
+                f"   Примеры размеров: {size_text}.",
+                f"   Строки источника: {reference_text}.",
+                f"   Причина: {note}.",
+                f"   Что нужно сделать: {_required_action(group[0])}",
+            ])
+        lines.extend(["", "Полный перечень строк и размеров находится в файле Требуется_уточнение.json."])
+    elif unresolved:
         lines.append("ПОЗИЦИИ, ТРЕБУЮЩИЕ РЕШЕНИЯ")
         for index, item in enumerate(unresolved, 1):
             lines.extend([

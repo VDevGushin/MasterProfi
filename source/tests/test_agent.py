@@ -3,13 +3,16 @@ from datetime import datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
+from openpyxl import Workbook
+
 from source.agent.llm import QwenClient
 from source.agent.router import select_skill
 from source.agent.runtime import _write_review_reports, requires_review_text
 from source.core.config import ROOT, load_agent_config, load_qwen_config
+from source.core.models import QuoteItem
 from source.core.naming import job_folder_name, quote_filename, slug
 from source.memory.knowledge import KnowledgeBase, initialize_knowledge
-from source.tools.pricing import price_items
+from source.tools.pricing import local_price_file, price_items, vertical_price
 from source.tools.reviewer import _contains_temporary_service
 from source.tools.tz_parser import extract_records, parse_tz
 from source.ui.dialogue import apply_supported_choice, build_options
@@ -36,6 +39,54 @@ def test_format_extractors() -> None:
 
     technical = extract_records(examples / "Техническое_задание_на_изготовление_рулонных_штор_коррект.pdf")
     assert len(technical) >= 30
+
+
+def test_structured_xlsx_inherits_product_fields_without_qwen() -> None:
+    class NoQwen:
+        def __init__(self) -> None:
+            self.calls: list[list[dict]] = []
+
+        def extract_items(self, records, _context):
+            self.calls.append(records)
+            return []
+
+    with TemporaryDirectory() as temporary:
+        path = Path(temporary) / "сложное ТЗ.xlsx"
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["помещение", "наименование изделий", "прозрачность материала", "материал", "ширина, м", "высота, м", "кол-во"])
+        sheet.append(["Холл", "вертикальные жалюзи", "50% затемнения", "Мальта белый", 2.0, 1.5, 1])
+        sheet.append([None, None, None, None, 2.1, 1.6, 2])
+        sheet.append(["Окно", "рулонная штора АМГ 32", "100% затемнения", "Альфа Black-Out белая", 1.0, 1.5, 1])
+        workbook.save(path)
+        records = extract_records(path)
+        assert len(records) == 3
+        assert records[1]["name"] == "вертикальные жалюзи"
+        assert records[1]["fabric"] == "Мальта белый"
+        assert records[1]["inherited_name"] is True
+        assert all(record["structured"] for record in records)
+
+        db = KnowledgeBase()
+        try:
+            initialize_knowledge(db)
+            qwen = NoQwen()
+            items = parse_tz(path, qwen, db)
+            assert len(items) == 3
+            assert qwen.calls == [[]]
+            assert items[1].system == ""
+            assert items[2].system == "AMG"
+            priced, unresolved, invalid = price_items(items, load_agent_config(), db, logger=silent)
+            assert len(priced) == 3
+            assert not unresolved
+            assert not invalid
+        finally:
+            db.close()
+
+
+def test_public_tools_package_has_no_circular_import() -> None:
+    from source.tools import extract_records as public_extract_records
+
+    assert public_extract_records is extract_records
 
 
 def test_pricing_without_delivery_or_installation() -> None:
@@ -77,6 +128,16 @@ def test_vertical_blinds_area_pricing() -> None:
         assert sum(item.category == "комплектация" and item.price_rub == 0 for item in priced) == 1
     finally:
         db.close()
+
+
+def test_vertical_price_matches_material_inside_catalog_cell() -> None:
+    source = local_price_file()
+    malta = QuoteItem("test:1", "вертикальные жалюзи", 1, area_m2=3.1, fabric="Мальта белый")
+    plain_blackout = QuoteItem("test:2", "вертикальные жалюзи", 1, area_m2=3.1, fabric="Плэйн В/О бежевый")
+    _, malta_category, _ = vertical_price(source, malta, 81)
+    _, plain_category, _ = vertical_price(source, plain_blackout, 81)
+    assert malta_category == "E"
+    assert plain_category == "4"
 
 
 def test_procurement_docx_requires_only_angular_rule() -> None:
@@ -160,6 +221,17 @@ def test_report_folder_is_recreated_if_removed_during_calculation() -> None:
         assert json_path.exists()
 
 
+def test_large_review_report_groups_repeated_unresolved_items() -> None:
+    unresolved = [
+        QuoteItem(f"xlsx:{index}", "римская штора", 1, width_m=2.2, height_m=1.6, fabric="Марсель", note="Не определена поддерживаемая система изделия")
+        for index in range(1, 14)
+    ]
+    text = requires_review_text(Path("большое ТЗ.xlsx"), [], unresolved, [])
+    assert "ГРУППЫ ПОЗИЦИЙ" in text
+    assert "Строк ТЗ: 13; всего изделий: 13 шт." in text
+    assert "Полный перечень строк" in text
+
+
 def test_user_can_choose_safe_angular_amg_rule() -> None:
     agent_config = load_agent_config()
     db = KnowledgeBase()
@@ -185,13 +257,17 @@ def test_user_can_choose_safe_angular_amg_rule() -> None:
 
 if __name__ == "__main__":
     test_format_extractors()
+    test_structured_xlsx_inherits_product_fields_without_qwen()
+    test_public_tools_package_has_no_circular_import()
     test_pricing_without_delivery_or_installation()
     test_vertical_blinds_area_pricing()
+    test_vertical_price_matches_material_inside_catalog_cell()
     test_procurement_docx_requires_only_angular_rule()
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
     test_human_readable_result_names()
     test_router_accepts_only_supported_tz_formats()
     test_report_folder_is_recreated_if_removed_during_calculation()
+    test_large_review_report_groups_repeated_unresolved_items()
     test_user_can_choose_safe_angular_amg_rule()
     print("OK")
