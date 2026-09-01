@@ -1,9 +1,13 @@
 from pathlib import Path
+from datetime import datetime
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 from source.config import ROOT, load_agent_config, load_qwen_config
-from source.agent import requires_review_text
-from source.dialogue import apply_supported_answer
+from source.agent import _write_review_reports, requires_review_text
+from source.dialogue import apply_supported_choice, build_options
 from source.knowledge import KnowledgeBase, initialize_knowledge
+from source.naming import job_folder_name, quote_filename, slug
 from source.parser import extract_records, parse_tz
 from source.qwen import QwenClient
 from source.reviewer import _contains_temporary_service
@@ -127,7 +131,25 @@ def test_mounting_profile_is_not_installation_service() -> None:
     assert _contains_temporary_service("Монтаж изделий — 1 услуга") == "монтаж"
 
 
-def test_user_can_confirm_safe_angular_amg_rule() -> None:
+def test_human_readable_result_names() -> None:
+    source = Path("ТЗ_рулонные шторы 2026 (2) (1).docx")
+    assert slug(source.stem) == "ТЗ-рулонные-шторы-2026-2-1"
+    assert job_folder_name(source, datetime(2026, 9, 1, 21, 20), "66fe9f") == (
+        "2026-09-01_21-20_ТЗ-рулонные-шторы-2026-2-1_66fe9f"
+    )
+    assert quote_filename(source) == "КП_ТЗ-рулонные-шторы-2026-2-1.pdf"
+
+
+def test_report_folder_is_recreated_if_removed_during_calculation() -> None:
+    with TemporaryDirectory() as temporary:
+        output_dir = Path(temporary) / "result"
+        context = SimpleNamespace(output_dir=output_dir)
+        text_path, json_path = _write_review_reports(context, {"status": "requires_review"}, "Нужно уточнение\n")
+        assert text_path.read_text(encoding="utf-8") == "Нужно уточнение\n"
+        assert json_path.exists()
+
+
+def test_user_can_choose_safe_angular_amg_rule() -> None:
     agent_config = load_agent_config()
     db = KnowledgeBase()
     try:
@@ -139,7 +161,9 @@ def test_user_can_confirm_safe_angular_amg_rule() -> None:
         )
         _, unresolved, _ = price_items(items, agent_config, db, logger=silent)
         assert len(unresolved) == 1
-        assert apply_supported_answer(unresolved, "1") == 1
+        options = build_options(unresolved)
+        assert [option["key"] for option in options] == ["angular_regular_amg", "defer"]
+        assert apply_supported_choice(unresolved, options[0]["key"]) == 1
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 10
         assert not unresolved
@@ -155,5 +179,7 @@ if __name__ == "__main__":
     test_procurement_docx_requires_only_angular_rule()
     test_bnt_electrics_pdf_pricing()
     test_mounting_profile_is_not_installation_service()
-    test_user_can_confirm_safe_angular_amg_rule()
+    test_human_readable_result_names()
+    test_report_folder_is_recreated_if_removed_during_calculation()
+    test_user_can_choose_safe_angular_amg_rule()
     print("OK")

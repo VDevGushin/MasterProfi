@@ -15,6 +15,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from .config import OUTPUT_DIR
 from .models import QuoteItem
+from .naming import quote_filename
 
 
 FONT_REGULAR = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -68,7 +69,10 @@ def create_quote_pdf(source: Path, items: list[QuoteItem], config: dict[str, Any
     _register_fonts()
     destination = output_dir or OUTPUT_DIR
     destination.mkdir(parents=True, exist_ok=True)
-    output = destination / f"КП_{source.stem}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
+    filename = quote_filename(source)
+    if output_dir is None:
+        filename = f"{Path(filename).stem}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
+    output = destination / filename
     document = SimpleDocTemplate(
         str(output),
         pagesize=A4,
