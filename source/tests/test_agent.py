@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from source.config import ROOT, load_agent_config, load_qwen_config
+from source.agent import requires_review_text
 from source.knowledge import KnowledgeBase, initialize_knowledge
 from source.parser import extract_records, parse_tz
 from source.qwen import QwenClient
@@ -91,6 +92,10 @@ def test_procurement_docx_requires_only_angular_rule() -> None:
         assert unresolved[0].name == "Штора (угловая)"
         assert unresolved[0].width_m == 0.72
         assert "угловой шторы" in unresolved[0].note
+        text = requires_review_text(ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx", priced, unresolved, invalid)
+        assert "КП НЕ СФОРМИРОВАНО" in text
+        assert "верх 590 мм, низ 720 мм, высота 1720 мм" in text
+        assert "Укажите правило расчёта" in text
     finally:
         db.close()
 
