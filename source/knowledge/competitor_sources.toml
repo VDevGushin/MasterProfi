@@ -1,0 +1,44 @@
+# Публичные источники конкурентов для RAG и поиска аналогов.
+# Поле authoritative_price=false запрещает использовать источник как нашу цену.
+
+[[source]]
+competitor = "gamma-i"
+url = "https://gamma-i.ru/docs/tekhnicheskie-katalogi/rulonnye-shtory/"
+kind = "technical_catalog"
+authoritative_price = false
+notes = "Технический каталог систем; оптовый прайс доступен только по запросу/в личном кабинете."
+
+[[source]]
+competitor = "gamma-i"
+url = "https://gamma-i.ru/upload/iblock/ddf/u1iqlaipn7nhpwrkdjbj3sy1d5jo1lm0/privod0923.pdf"
+kind = "motor_compatibility"
+authoritative_price = false
+notes = "Совместимость изделий и электроприводов."
+
+[[source]]
+competitor = "shtorki-online"
+url = "https://shtorki-online.ru/rulonnye_shtory.html"
+kind = "public_starting_prices"
+authoritative_price = false
+notes = "Розничные цены «от» и характеристики; точная цена зависит от калькулятора."
+
+[[source]]
+competitor = "shtorki-online"
+url = "https://shtorki-online.ru/calculyator.html"
+kind = "public_calculator"
+authoritative_price = false
+notes = "Публичный калькулятор, полезен для сравнения систем и категорий."
+
+[[source]]
+competitor = "rulonki"
+url = "https://rulonki.com/rulonnye-shtory"
+kind = "public_starting_prices"
+authoritative_price = false
+notes = "Розничные стартовые цены и описания систем."
+
+[[source]]
+competitor = "rulonki"
+url = "https://rulonki.com/rolikovye-shtory"
+kind = "public_catalog"
+authoritative_price = false
+notes = "Каталог изделий и тканей конкурента."

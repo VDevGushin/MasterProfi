@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.agent_data/
+source/knowledge/knowledge.sqlite3
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# Коммерческие и клиентские файлы остаются только на рабочем компьютере.
+Локальные данные/
+ПримерыТЗ/
+ПримерыКП/
