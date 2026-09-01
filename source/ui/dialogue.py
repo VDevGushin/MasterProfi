@@ -43,7 +43,6 @@ def ask_user(
     unresolved: list[QuoteItem],
     qwen: QwenClient,
     logger: Callable[[str], None],
-    reader: Callable[[str], str] = input,
 ) -> dict[str, Any] | None:
     """Conduct one terminal clarification without letting the model invent a price rule."""
     if not sys.stdin.isatty():

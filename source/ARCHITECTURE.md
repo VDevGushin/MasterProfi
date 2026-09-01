@@ -2,7 +2,7 @@
 
 Поток обработки:
 
-`input → agent/router → skills/make_proposal → tools/tz_parser → memory/RAG + Qwen → tools/pricing → PDF → tools/reviewer → output`
+`input → agent/router → сценарий make_proposal → tools/tz_parser → memory/RAG + Qwen → tools/pricing → PDF → tools/reviewer → output`
 
 ## Слои кода
 
@@ -12,7 +12,7 @@
 - `memory/` — SQLite/RAG, примеры КП и ТЗ, подтверждённые аналоги конкурентов.
 - `ui/` — терминальное меню для безопасных уточнений пользователя.
 - `core/` — модели данных, настройки путей и правила именования файлов.
-- `skills/` — краткие описания бизнес-навыков. Они не загружаются в Qwen целиком: маршрутизатор выбирает только нужный сценарий.
+- `skills/` — краткие описания бизнес-навыков для развития и проверки сценариев. Сейчас router детерминированно выбирает `make_proposal`; тексты навыков не загружаются в Qwen целиком.
 - `prompts/` — общие правила для LLM; сами рабочие промпты остаются короткими в `agent/prompt.py`.
 
 ## Границы ответственности
