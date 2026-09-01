@@ -10,6 +10,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "source"
+CONFIG_DIR = ROOT / "config"
 INPUT_DIR = ROOT / "input"
 OUTPUT_DIR = ROOT / "output"
 DATA_DIR = ROOT / "Локальные данные"
@@ -18,8 +19,8 @@ REFERENCE_QUOTES_DIR = ROOT / "ПримерыКП"
 KNOWLEDGE_DIR = SOURCE_DIR / "knowledge"
 TASKS_DIR = ROOT / ".agent_data" / "tasks"
 KNOWLEDGE_DB = KNOWLEDGE_DIR / "knowledge.sqlite3"
-COMPETITORS_CONFIG = KNOWLEDGE_DIR / "competitors.yaml"
-COMPETITOR_SOURCES = KNOWLEDGE_DIR / "competitor_sources.toml"
+COMPETITORS_CONFIG = CONFIG_DIR / "competitors.toml"
+COMPETITOR_SOURCES = CONFIG_DIR / "competitor_sources.toml"
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -28,8 +29,8 @@ def _read_toml(path: Path) -> dict[str, Any]:
 
 
 def load_agent_config() -> dict[str, Any]:
-    return _read_toml(SOURCE_DIR / "config" / "agent.toml")
+    return _read_toml(CONFIG_DIR / "agent.toml")
 
 
 def load_qwen_config() -> dict[str, Any]:
-    return _read_toml(SOURCE_DIR / "config" / "qwen.toml")
+    return _read_toml(CONFIG_DIR / "qwen.toml")

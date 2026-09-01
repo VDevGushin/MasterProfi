@@ -1,0 +1,71 @@
+# Долговременная база знаний об аналогах конкурентов.
+# Редактируется вручную в любом текстовом редакторе. После следующего запуска
+# агент загрузит подтверждённые аналоги в локальную базу знаний.
+
+version = 1
+
+[[competitor]]
+id = "gamma_i"
+name = "Гамма"
+base_url = "https://gamma-i.ru"
+enabled = true
+notes = "Каталоги тканей и систем"
+
+[[competitor]]
+id = "shtorki_online"
+name = "Шторки Онлайн"
+base_url = "https://shtorki-online.ru"
+enabled = true
+notes = "Интернет-магазин рулонных штор"
+
+[[competitor]]
+id = "rulonki"
+name = "Рулонки"
+base_url = "https://rulonki.com"
+enabled = true
+notes = "Интернет-магазин рулонных штор"
+
+# Добавляйте один блок [[analogue]] на каждый подтверждённый аналог.
+# Агент использует запись для цены ТОЛЬКО если verified = true.
+# category допускает только: E, 1, 2, 3, 4, 5.
+
+[[analogue]]
+competitor = "gamma_i"
+source_material = "Карина Int"
+local_fabric = "Омега"
+category = "1"
+system = "Стандарт MG"
+confidence = 0.65
+verified = true
+source_url = "https://gamma-i.ru/catalog/complects/karina/"
+
+[[analogue]]
+competitor = "gamma_i"
+source_material = "Тэффи Int"
+local_fabric = "Омега"
+category = "1"
+system = "Стандарт MG"
+confidence = 0.65
+verified = true
+source_url = "https://gamma-i.ru/catalog/complects/teffi/"
+
+[[analogue]]
+competitor = "gamma_i"
+source_material = "Респект Int"
+local_fabric = "Омега Black-Out"
+category = "2"
+system = "Mini"
+confidence = 0.65
+verified = true
+source_url = "https://gamma-i.ru/catalog/complects/respekt-blekaut/"
+
+# Пример новой записи. Уберите # в начале каждой строки и заполните данные.
+# [[analogue]]
+# competitor = "gamma_i"
+# source_material = "Название ткани конкурента"
+# local_fabric = "Название ткани из локального прайса"
+# category = "1"
+# system = "Стандарт MG"
+# confidence = 1.0
+# verified = false
+# source_url = "https://..."
