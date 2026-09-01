@@ -6,9 +6,9 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from .knowledge import KnowledgeBase, normalize, retrieve_context
-from .models import QuoteItem
-from .qwen import QwenClient
+from ..agent.llm import QwenClient
+from ..core.models import QuoteItem
+from ..memory.knowledge import KnowledgeBase, normalize, retrieve_context
 
 
 NAME_MARKERS = ("наименование", "товары", "изделие", "позиция")

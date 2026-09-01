@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 SOURCE_DIR = ROOT / "source"
 CONFIG_DIR = ROOT / "config"
 INPUT_DIR = ROOT / "input"

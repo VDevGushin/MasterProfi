@@ -3,15 +3,15 @@ from datetime import datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-from source.config import ROOT, load_agent_config, load_qwen_config
-from source.agent import _write_review_reports, requires_review_text
-from source.dialogue import apply_supported_choice, build_options
-from source.knowledge import KnowledgeBase, initialize_knowledge
-from source.naming import job_folder_name, quote_filename, slug
-from source.parser import extract_records, parse_tz
-from source.qwen import QwenClient
-from source.reviewer import _contains_temporary_service
-from source.tools import price_items
+from source.agent.llm import QwenClient
+from source.agent.runtime import _write_review_reports, requires_review_text
+from source.core.config import ROOT, load_agent_config, load_qwen_config
+from source.core.naming import job_folder_name, quote_filename, slug
+from source.memory.knowledge import KnowledgeBase, initialize_knowledge
+from source.tools.pricing import price_items
+from source.tools.reviewer import _contains_temporary_service
+from source.tools.tz_parser import extract_records, parse_tz
+from source.ui.dialogue import apply_supported_choice, build_options
 
 
 def silent(*_args, **_kwargs):

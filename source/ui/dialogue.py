@@ -4,8 +4,8 @@ import sys
 from dataclasses import asdict
 from typing import Any, Callable
 
-from .models import QuoteItem
-from .qwen import QwenClient
+from ..agent.llm import QwenClient
+from ..core.models import QuoteItem
 from .terminal_menu import choose_option
 
 

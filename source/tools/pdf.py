@@ -13,9 +13,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from .config import OUTPUT_DIR
-from .models import QuoteItem
-from .naming import quote_filename
+from ..core.config import OUTPUT_DIR
+from ..core.models import QuoteItem
+from ..core.naming import quote_filename
 
 
 FONT_REGULAR = "/System/Library/Fonts/Supplemental/Arial.ttf"
