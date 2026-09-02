@@ -9,7 +9,7 @@ from source.agent.llm import create_llm_provider
 from source.agent.ollama_provider import OllamaProvider
 from source.agent.router import select_skill
 from source.agent.runtime import _write_review_reports, requires_review_text
-from source.core.config import ROOT, load_agent_config, load_qwen_config
+from source.core.config import ROOT, load_agent_config, load_llm_config
 from source.core.models import QuoteItem
 from source.core.naming import job_folder_name, quote_filename, slug
 from source.memory.knowledge import KnowledgeBase, initialize_knowledge
@@ -92,11 +92,11 @@ def test_public_tools_package_has_no_circular_import() -> None:
 
 def test_pricing_without_delivery_or_installation() -> None:
     agent_config = load_agent_config()
-    qwen_config = {**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
+    llm_config = {**load_llm_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        client = create_llm_provider(qwen_config, logger=silent)
+        client = create_llm_provider(llm_config, logger=silent)
         items = parse_tz(ROOT / "ПримерыТЗ" / "шторы Солнечногорск.xlsx", client, db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 29
@@ -115,11 +115,11 @@ def test_pricing_without_delivery_or_installation() -> None:
 
 def test_vertical_blinds_area_pricing() -> None:
     agent_config = load_agent_config()
-    qwen_config = {**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
+    llm_config = {**load_llm_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        items = parse_tz(ROOT / "ПримерыТЗ" / "ЖАЛЮЗИ 1.docx", create_llm_provider(qwen_config, logger=silent), db)
+        items = parse_tz(ROOT / "ПримерыТЗ" / "ЖАЛЮЗИ 1.docx", create_llm_provider(llm_config, logger=silent), db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 27
         assert not unresolved
@@ -143,13 +143,13 @@ def test_vertical_price_matches_material_inside_catalog_cell() -> None:
 
 def test_procurement_docx_requires_only_angular_rule() -> None:
     agent_config = load_agent_config()
-    qwen_config = {**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
+    llm_config = {**load_llm_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
         items = parse_tz(
             ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx",
-            create_llm_provider(qwen_config, logger=silent),
+            create_llm_provider(llm_config, logger=silent),
             db,
         )
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
@@ -170,11 +170,11 @@ def test_procurement_docx_requires_only_angular_rule() -> None:
 
 def test_bnt_electrics_pdf_pricing() -> None:
     agent_config = load_agent_config()
-    qwen_config = {**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
+    llm_config = {**load_llm_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        items = parse_tz(ROOT / "ПримерыТЗ" / "ЗН Восток.pdf", create_llm_provider(qwen_config, logger=silent), db)
+        items = parse_tz(ROOT / "ПримерыТЗ" / "ЗН Восток.pdf", create_llm_provider(llm_config, logger=silent), db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(items) == 8
         assert len(priced) == 8
@@ -252,7 +252,7 @@ def test_user_can_choose_safe_angular_amg_rule() -> None:
         initialize_knowledge(db)
         items = parse_tz(
             ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx",
-            create_llm_provider({**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}, logger=silent),
+            create_llm_provider({**load_llm_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}, logger=silent),
             db,
         )
         _, unresolved, _ = price_items(items, agent_config, db, logger=silent)
