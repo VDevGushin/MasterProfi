@@ -40,7 +40,7 @@ ollama pull qwen3.5:9b
 ollama list
 ```
 
-Последняя команда должна показать `qwen3.5:9b`. Имя модели должно совпадать со значением `model` в `config/qwen.toml`.
+Последняя команда должна показать `qwen3.5:9b`. Имя модели должно совпадать со значением `model` в `config/llm.toml`.
 
 ## 3. Скачать код агента
 
@@ -82,7 +82,7 @@ python3 -m venv .venv
 Все настройки находятся в папке `config/`:
 
 - `config/agent.toml` — курс, гарантия, срок изготовления;
-- `config/qwen.toml` — имя модели и лимиты Qwen;
+- `config/llm.toml` — провайдер, имя модели и лимиты LLM;
 - `config/competitors.toml` — подтверждённые аналоги тканей конкурентов;
 - `config/competitor_sources.toml` — справочные сайты конкурентов.
 
@@ -138,7 +138,7 @@ OK
 | `permission denied` | Один раз выполните `chmod +x run_agent.command`. |
 | `ModuleNotFoundError` | Выполните `.venv/bin/python -m pip install -r requirements.txt`. |
 | `ollama: command not found` | Запустите приложение Ollama, затем откройте новый Терминал. Если не помогло — переустановите Ollama с официального сайта. |
-| Агент не может связаться с Qwen | Проверьте `ollama list`, запустите Ollama и убедитесь, что имя модели в `config/qwen.toml` совпадает с установленным. |
+| Агент не может связаться с Qwen | Проверьте `ollama list`, запустите Ollama и убедитесь, что имя модели в `config/llm.toml` совпадает с установленным. |
 | Нет XLSX-прайса | Скопируйте актуальный файл прайса в `Локальные данные/`. |
 
 ## Обновление кода

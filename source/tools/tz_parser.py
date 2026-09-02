@@ -6,7 +6,7 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from ..agent.llm import QwenClient
+from ..agent.llm import LLMProvider
 from ..core.models import QuoteItem
 from ..memory.knowledge import KnowledgeBase, normalize, retrieve_context
 
@@ -429,11 +429,11 @@ def _needs_qwen(record: dict[str, Any]) -> bool:
     return not (name and _quantity(record.get("quantity")) and has_size and known_family)
 
 
-def parse_tz(path: Path, qwen: QwenClient, db: KnowledgeBase) -> list[QuoteItem]:
+def parse_tz(path: Path, llm: LLMProvider, db: KnowledgeBase) -> list[QuoteItem]:
     records = extract_records(path)
     context = retrieve_context(db, " ".join(record.get("raw_text", "") for record in records))
     qwen_input = [record for record in records if _needs_qwen(record)]
-    qwen_rows = {str(row.get("source_ref")): row for row in qwen.extract_items(qwen_input, context)}
+    qwen_rows = {str(row.get("source_ref")): row for row in llm.extract_items(qwen_input, context)}
     items: list[QuoteItem] = []
     for record in records:
         parsed = qwen_rows.get(str(record["source_ref"]), {})

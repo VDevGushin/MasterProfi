@@ -17,7 +17,7 @@ from ..tools.pricing import price_items
 from ..tools.reviewer import review_quote
 from ..tools.tz_parser import parse_tz
 from ..ui.dialogue import ask_user
-from .llm import QwenClient
+from .llm import create_llm_provider
 
 
 def log(message: str) -> None:
@@ -143,15 +143,15 @@ def _write_review_reports(context: TaskContext, report: dict[str, Any], text: st
     return text_path, json_path
 
 
-def process_file(path: Path, agent_config: dict[str, Any], qwen_config: dict[str, Any]) -> bool:
+def process_file(path: Path, agent_config: dict[str, Any], llm_config: dict[str, Any]) -> bool:
     context = TaskContext(path)
     db = KnowledgeBase()
     try:
         log(f"Обрабатываю ТЗ: {path.name}")
         knowledge_stats = initialize_knowledge(db)
         context.save("knowledge.json", knowledge_stats)
-        qwen = QwenClient(qwen_config, logger=log)
-        items = parse_tz(path, qwen, db)
+        llm = create_llm_provider(llm_config, logger=log)
+        items = parse_tz(path, llm, db)
         context.save("parsed_items.json", [asdict(item) for item in items])
         log(f"Извлечено позиций: {len(items)}")
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=log)
@@ -162,7 +162,7 @@ def process_file(path: Path, agent_config: dict[str, Any], qwen_config: dict[str
         })
         dialogue = None
         if unresolved and path.parent.resolve() == INPUT_DIR.resolve() and agent_config.get("interactive_clarifications", True):
-            dialogue = ask_user(unresolved, qwen, log)
+            dialogue = ask_user(unresolved, llm, log)
             if dialogue:
                 context.save("clarification_dialogue.json", dialogue)
                 if dialogue["resolved_count"]:

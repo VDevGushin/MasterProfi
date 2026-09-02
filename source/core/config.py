@@ -32,5 +32,5 @@ def load_agent_config() -> dict[str, Any]:
     return _read_toml(CONFIG_DIR / "agent.toml")
 
 
-def load_qwen_config() -> dict[str, Any]:
-    return _read_toml(CONFIG_DIR / "qwen.toml")
+def load_llm_config() -> dict[str, Any]:
+    return _read_toml(CONFIG_DIR / "llm.toml")
