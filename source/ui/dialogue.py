@@ -4,7 +4,7 @@ import sys
 from dataclasses import asdict
 from typing import Any, Callable
 
-from ..agent.llm import QwenClient
+from ..agent.llm import LLMProvider
 from ..core.models import QuoteItem
 from .terminal_menu import choose_option
 
@@ -41,7 +41,7 @@ def build_options(unresolved: list[QuoteItem]) -> list[dict[str, str]]:
 
 def ask_user(
     unresolved: list[QuoteItem],
-    qwen: QwenClient,
+    llm: LLMProvider,
     logger: Callable[[str], None],
 ) -> dict[str, Any] | None:
     """Conduct one terminal clarification without letting the model invent a price rule."""
@@ -56,7 +56,7 @@ def ask_user(
     if len(options) == 1 and options[0]["key"] == "defer":
         logger("Нет безопасного варианта выбора; формирую отчёт для специалиста без запроса Qwen.")
         return None
-    question = qwen.clarification_question([asdict(item) for item in unresolved], fallback)
+    question = llm.clarification_question([asdict(item) for item in unresolved], fallback)
     print("\n--- Уточнение от Qwen ---", flush=True)
     print(question, flush=True)
     selected_index = choose_option([option["label"] for option in options])

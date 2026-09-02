@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 from openpyxl import Workbook
 
-from source.agent.llm import QwenClient
+from source.agent.llm import create_llm_provider
+from source.agent.ollama_provider import OllamaProvider
 from source.agent.router import select_skill
 from source.agent.runtime import _write_review_reports, requires_review_text
 from source.core.config import ROOT, load_agent_config, load_qwen_config
@@ -95,7 +96,7 @@ def test_pricing_without_delivery_or_installation() -> None:
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        client = QwenClient(qwen_config, logger=silent)
+        client = create_llm_provider(qwen_config, logger=silent)
         items = parse_tz(ROOT / "ПримерыТЗ" / "шторы Солнечногорск.xlsx", client, db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 29
@@ -118,7 +119,7 @@ def test_vertical_blinds_area_pricing() -> None:
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        items = parse_tz(ROOT / "ПримерыТЗ" / "ЖАЛЮЗИ 1.docx", QwenClient(qwen_config, logger=silent), db)
+        items = parse_tz(ROOT / "ПримерыТЗ" / "ЖАЛЮЗИ 1.docx", create_llm_provider(qwen_config, logger=silent), db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(priced) == 27
         assert not unresolved
@@ -148,7 +149,7 @@ def test_procurement_docx_requires_only_angular_rule() -> None:
         initialize_knowledge(db)
         items = parse_tz(
             ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx",
-            QwenClient(qwen_config, logger=silent),
+            create_llm_provider(qwen_config, logger=silent),
             db,
         )
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
@@ -173,7 +174,7 @@ def test_bnt_electrics_pdf_pricing() -> None:
     db = KnowledgeBase()
     try:
         initialize_knowledge(db)
-        items = parse_tz(ROOT / "ПримерыТЗ" / "ЗН Восток.pdf", QwenClient(qwen_config, logger=silent), db)
+        items = parse_tz(ROOT / "ПримерыТЗ" / "ЗН Восток.pdf", create_llm_provider(qwen_config, logger=silent), db)
         priced, unresolved, invalid = price_items(items, agent_config, db, logger=silent)
         assert len(items) == 8
         assert len(priced) == 8
@@ -212,6 +213,18 @@ def test_router_accepts_only_supported_tz_formats() -> None:
         raise AssertionError("Router должен отклонять неподдерживаемый формат")
 
 
+def test_llm_provider_is_selected_by_config() -> None:
+    provider = create_llm_provider({"provider": "ollama", "model": "test", "url": "http://127.0.0.1:1"}, logger=silent)
+    assert isinstance(provider, OllamaProvider)
+    assert provider.extract_items([]) == []
+    try:
+        create_llm_provider({"provider": "unknown"}, logger=silent)
+    except ValueError as error:
+        assert "Неподдерживаемый" in str(error)
+    else:
+        raise AssertionError("Неизвестный провайдер должен быть отклонён")
+
+
 def test_report_folder_is_recreated_if_removed_during_calculation() -> None:
     with TemporaryDirectory() as temporary:
         output_dir = Path(temporary) / "result"
@@ -239,7 +252,7 @@ def test_user_can_choose_safe_angular_amg_rule() -> None:
         initialize_knowledge(db)
         items = parse_tz(
             ROOT / "ПримерыТЗ" / "ТЗ_рулонные шторы 2026 (2) (1).docx",
-            QwenClient({**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}, logger=silent),
+            create_llm_provider({**load_qwen_config(), "url": "http://127.0.0.1:1/api/chat", "timeout_seconds": 1}, logger=silent),
             db,
         )
         _, unresolved, _ = price_items(items, agent_config, db, logger=silent)
@@ -267,6 +280,7 @@ if __name__ == "__main__":
     test_mounting_profile_is_not_installation_service()
     test_human_readable_result_names()
     test_router_accepts_only_supported_tz_formats()
+    test_llm_provider_is_selected_by_config()
     test_report_folder_is_recreated_if_removed_during_calculation()
     test_large_review_report_groups_repeated_unresolved_items()
     test_user_can_choose_safe_angular_amg_rule()

@@ -32,5 +32,9 @@ def load_agent_config() -> dict[str, Any]:
     return _read_toml(CONFIG_DIR / "agent.toml")
 
 
-def load_qwen_config() -> dict[str, Any]:
+def load_llm_config() -> dict[str, Any]:
     return _read_toml(CONFIG_DIR / "qwen.toml")
+
+
+# Временное имя для обратной совместимости со старыми внешними скриптами.
+load_qwen_config = load_llm_config
