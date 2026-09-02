@@ -43,7 +43,7 @@ def test_format_extractors() -> None:
 
 
 def test_structured_xlsx_inherits_product_fields_without_qwen() -> None:
-    class NoQwen:
+    class NoLLM:
         def __init__(self) -> None:
             self.calls: list[list[dict]] = []
 
@@ -70,10 +70,10 @@ def test_structured_xlsx_inherits_product_fields_without_qwen() -> None:
         db = KnowledgeBase()
         try:
             initialize_knowledge(db)
-            qwen = NoQwen()
-            items = parse_tz(path, qwen, db)
+            llm = NoLLM()
+            items = parse_tz(path, llm, db)
             assert len(items) == 3
-            assert qwen.calls == [[]]
+            assert llm.calls == [[]]
             assert items[1].system == ""
             assert items[2].system == "AMG"
             priced, unresolved, invalid = price_items(items, load_agent_config(), db, logger=silent)
