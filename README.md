@@ -1,6 +1,6 @@
 # MasterProfi AI Agent
 
-Агент формирует коммерческие предложения по ТЗ с использованием Python. Модель для разбора ТЗ можно выбрать: локальная Qwen через Ollama либо облачные Claude, DeepSeek или Qwen через API.
+Агент формирует коммерческие предложения по ТЗ с использованием Python. Модель для разбора ТЗ можно выбрать: локальная Qwen через Ollama либо облачные Claude, ChatGPT, DeepSeek или Qwen через API.
 
 Для установки на новый Mac с нуля используйте [SETUP_MAC.md](SETUP_MAC.md); для Windows — [SETUP_WINDOWS.md](SETUP_WINDOWS.md).
 
@@ -30,6 +30,10 @@ run_agent.bat
 - **Claude (Anthropic)** — облачная модель. Перед запуском задайте ключ:
   ```bash
   export ANTHROPIC_API_KEY=sk-ant-...
+  ```
+- **ChatGPT (OpenAI)** — облачная модель. Перед запуском задайте ключ:
+  ```bash
+  export OPENAI_API_KEY=sk-...
   ```
 - **DeepSeek** — облачная модель. Перед запуском задайте ключ:
   ```bash
