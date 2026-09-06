@@ -252,7 +252,12 @@ def test_cloud_providers_are_selected_by_config_and_require_api_key() -> None:
 
     env_var = "MASTERPROFI_TEST_MISSING_KEY"
     os.environ.pop(env_var, None)
-    for provider_name, expected_class in (("claude", ClaudeProvider), ("deepseek", OpenAICompatibleProvider), ("qwen", OpenAICompatibleProvider)):
+    for provider_name, expected_class in (
+        ("claude", ClaudeProvider),
+        ("chatgpt", OpenAICompatibleProvider),
+        ("deepseek", OpenAICompatibleProvider),
+        ("qwen", OpenAICompatibleProvider),
+    ):
         try:
             create_llm_provider({"provider": provider_name, "model": "test", "api_key_env": env_var}, logger=silent)
         except ValueError as error:
@@ -272,6 +277,11 @@ def test_cloud_providers_are_selected_by_config_and_require_api_key() -> None:
             logger=silent,
         )
         assert isinstance(deepseek, OpenAICompatibleProvider)
+        chatgpt = create_llm_provider(
+            {"provider": "chatgpt", "model": "test", "api_key_env": env_var, "base_url": "http://127.0.0.1:1"},
+            logger=silent,
+        )
+        assert isinstance(chatgpt, OpenAICompatibleProvider)
     finally:
         os.environ.pop(env_var, None)
 
@@ -284,7 +294,7 @@ def test_llm_config_defaults_to_ollama_and_lists_all_providers() -> None:
     assert "url" in default_config
 
     providers = dict(list_llm_providers())
-    assert set(providers) == {"ollama", "claude", "deepseek", "qwen"}
+    assert set(providers) == {"ollama", "claude", "chatgpt", "deepseek", "qwen"}
 
     claude_config = load_llm_config("claude")
     assert claude_config["provider"] == "claude"
