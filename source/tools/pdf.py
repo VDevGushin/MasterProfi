@@ -65,6 +65,15 @@ def _description(item: QuoteItem) -> str:
             f"Электропривод 220В, радиоуправление; комплектация: белая<br/>"
             f"Ткань: {item.fabric} {item.color}, {item.opacity}"
         )
+    if item.raw.get("variant") == "bnt_classic_metal_chain":
+        reinforced = " (усиленная труба)" if "усилен" in item.name.lower() else ""
+        chain_length = float(item.raw.get("chain_length_m") or item.height_m or 0)
+        return (
+            f"Рулонная штора {escape(item.system)}{reinforced}<br/>"
+            f"Ткань: {escape(item.fabric)} {escape(item.color)}, {escape(item.opacity)}<br/>"
+            f"Ручное управление, металлическая цепь; расчётная длина {chain_length:.2f} м "
+            "(по высоте изделия)"
+        )
     if not item.system:
         text = item.name
     else:

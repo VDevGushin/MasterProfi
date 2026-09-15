@@ -49,11 +49,14 @@ def test_material_header_can_name_bnt_products_without_importing_installation() 
     with TemporaryDirectory() as temporary:
         path = Path(temporary) / "спецификация BNT.docx"
         document = Document()
+        document.add_paragraph("Адрес: Пресненская наб., д. 8, стр. 1.")
         table = document.add_table(rows=1, cols=4)
         for cell, value in zip(table.rows[0].cells, ("Материал", "Ширина", "Высота", "Кол-во")):
             cell.text = value
         for row in (
             ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл", "1,450", "2,700", "14"),
+            ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл", "2,000", "2,700", "1"),
+            ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл", "2,010", "2,700", "1"),
             ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл, усиленная труба", "2,15", "2,700", "1"),
             ("Монтаж изделий", "", "", "15"),
         ):
@@ -61,9 +64,10 @@ def test_material_header_can_name_bnt_products_without_importing_installation() 
                 cell.text = value
         document.save(path)
         records = extract_records(path)
-        assert len(records) == 2
-        assert [record["quantity"] for record in records] == [14, 1]
-        assert [record["width_m"] for record in records] == [1.45, 2.15]
+        assert len(records) == 4
+        assert [record["quantity"] for record in records] == [14, 1, 1, 1]
+        assert [record["width_m"] for record in records] == [1.45, 2.0, 2.01, 2.15]
+        assert all(record["address"] == "Пресненская наб., д. 8, стр. 1." for record in records)
 
         class NoLLM:
             def extract_items(self, records, _context):
@@ -73,12 +77,17 @@ def test_material_header_can_name_bnt_products_without_importing_installation() 
         db = KnowledgeBase()
         try:
             items = parse_tz(path, NoLLM(), db)
-            assert [item.system for item in items] == ["BNT", "BNT"]
-            assert [item.fabric for item in items] == ["АЛЬФА BLACK-OUT", "АЛЬФА BLACK-OUT"]
+            assert [item.system for item in items] == ["BNT"] * 4
+            assert [item.fabric for item in items] == ["АЛЬФА BLACK-OUT"] * 4
             assert all(item.color == "бежевый" for item in items)
             priced, unresolved, invalid = price_items(items, load_agent_config(), db, logger=silent)
-            assert not priced and not invalid and len(unresolved) == 2
-            assert all("длину металлической цепи" in item.note for item in unresolved)
+            assert len(priced) == 4 and not unresolved and not invalid
+            assert [item.system for item in priced] == ["BNT M", "BNT M", "BNT L", "BNT L"]
+            assert all(item.category == "2" for item in priced)
+            assert all(item.raw["chain_length_m"] == 2.7 for item in priced)
+            assert "BEN M!U34" in priced[0].price_source
+            assert "BEN L!U30" in priced[2].price_source
+            assert "Рулонные ткани!F12" in priced[3].price_source
         finally:
             db.close()
 

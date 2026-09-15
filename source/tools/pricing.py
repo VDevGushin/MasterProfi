@@ -389,6 +389,26 @@ def amg_cassette_surcharge(price_path: Path, item: QuoteItem) -> tuple[float | N
 
 def bnt_price(price_path: Path, item: QuoteItem, category: str, usd_rub_rate: float) -> tuple[int | None, str]:
     variant = item.raw.get("variant")
+    if variant == "bnt_classic_metal_chain":
+        width = float(item.width_m or 0)
+        height = float(item.height_m or 0)
+        series = str(item.raw.get("bnt_series") or "")
+        if not width or not height or series not in {"M", "L"}:
+            return None, ""
+        sheet_name = f"BEN {series}"
+        base, source = matrix_price(price_path, sheet_name, category, height, width)
+        if base is None:
+            return None, ""
+        chain_cell = "U34" if series == "M" else "U30"
+        chain_rate = _usd_option(price_path, sheet_name, chain_cell)
+        chain_length = height
+        total_usd = base + chain_rate * chain_length
+        provenance = (
+            f"{source} + {sheet_name}!{chain_cell} металлическая цепь "
+            f"{chain_rate:.2f} $/м × {chain_length:.2f} м "
+            f"(расчётная длина = высота изделия) / курс {usd_rub_rate} руб."
+        )
+        return round(total_usd * usd_rub_rate), provenance
     if variant == "bnt_m44_mono_electric":
         widths = [float(value) for value in item.raw.get("component_widths_m", [])]
         if not widths or item.height_m is None:
@@ -500,16 +520,12 @@ def price_items(items: list[QuoteItem], config: dict[str, Any], db: KnowledgeBas
             item.note = "В локальном прайсе не найдено подтверждённое правило расчёта угловой шторы"
             unresolved.append(item)
             continue
-        if item.system == "BNT" and not item.raw.get("variant"):
-            item.note = (
-                "Уточните серию BNT M/L и длину металлической цепи; "
-                "BEN M!U34 и BEN L!U30 задают цену цепи за погонный метр"
-            )
-            if "УСИЛЕН" in normalize_key(item.name):
-                item.note += "; уточните диаметр усиленной трубы (варианты в BEN M!H24:H25, BEN L!H26:H28)"
-            item.note += ". Нужен ручной расчёт и корректировка КП"
-            unresolved.append(item)
-            continue
+        if item.system == "BNT" and not item.raw.get("variant") and item.width_m:
+            series = "M" if float(item.width_m) <= 2.0 else "L"
+            item.raw["variant"] = "bnt_classic_metal_chain"
+            item.raw["bnt_series"] = series
+            item.raw["chain_length_m"] = float(item.height_m or 0)
+            item.system = f"BNT {series}"
         accessory, accessory_source = accessory_price(price_path, item, float(config["usd_rub_rate"]))
         if accessory is not None:
             item.price_rub = accessory
@@ -554,7 +570,7 @@ def price_items(items: list[QuoteItem], config: dict[str, Any], db: KnowledgeBas
             priced.append(item)
             logger(f"{item.source_ref}: вертикальные жалюзи, категория {category}, {price} руб./ед.")
             continue
-        if item.raw.get("variant") in {"bnt_m44_mono_electric", "bnt_l65_electric"}:
+        if item.raw.get("variant") in {"bnt_classic_metal_chain", "bnt_m44_mono_electric", "bnt_l65_electric"}:
             category, _, fabric_source = _category(item, catalog, db)
             if not category:
                 item.note = f"Не найдена ценовая категория ткани «{item.fabric}»"
@@ -573,7 +589,7 @@ def price_items(items: list[QuoteItem], config: dict[str, Any], db: KnowledgeBas
             item.price_rub = price
             item.price_source = provenance + (f" / {fabric_width_source}" if fabric_width_source else "")
             priced.append(item)
-            logger(f"{item.source_ref}: {item.system}, категория {category}, электрика, {price} руб./ед.")
+            logger(f"{item.source_ref}: {item.system}, категория {category}, {price} руб./ед.")
             continue
         sheet_name = _system_sheet(item.system)
         if not sheet_name:

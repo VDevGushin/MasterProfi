@@ -405,6 +405,11 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
     from docx import Document
     document = Document(path)
     result: list[dict[str, Any]] = []
+    address = next(
+        (normalize(match.group(1)) for paragraph in document.paragraphs
+         if (match := re.match(r"\s*адрес\s*:\s*(.+)", paragraph.text, re.I))),
+        "",
+    )
     for table_index, table in enumerate(document.tables, 1):
         rows = [_unique_cells(row) for row in table.rows]
         ktru_records = _ktru_docx_records(table_index, rows)
@@ -443,6 +448,8 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
             if item and item["quantity"] and not re.match(r"^(?:монтаж|доставка)\b", item["name"], re.I):
                 if normalize(values[indexes["name"]]).lower().startswith("рулонная штора bnt"):
                     item["structured"] = True
+                if address:
+                    item["address"] = address
                 result.append(item)
     document_text = normalize(" ".join(
         [paragraph.text for paragraph in document.paragraphs]
