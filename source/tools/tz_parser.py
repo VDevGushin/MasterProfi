@@ -64,6 +64,18 @@ def _header_index(values: list[Any], markers: tuple[str, ...]) -> int | None:
     return None
 
 
+def _product_name_index(values: list[Any]) -> int | None:
+    index = _header_index(values, NAME_MARKERS)
+    if index is not None:
+        return index
+    # В коротких спецификациях «Материал» обозначает всю позицию изделия,
+    # если рядом есть только размер и количество, а не отдельное наименование.
+    material = _material_index(values)
+    if material is not None and _header_index(values, WIDTH_MARKERS) is not None and _header_index(values, HEIGHT_MARKERS) is not None:
+        return material
+    return None
+
+
 def _material_index(values: list[Any]) -> int | None:
     """Find a fabric column without confusing it with 'прозрачность материала'."""
     for index, value in enumerate(values):
@@ -95,7 +107,7 @@ def _xlsx_records(path: Path) -> list[dict[str, Any]]:
     header_row = None
     indexes: dict[str, int | None] = {}
     for row_index, values in enumerate(rows[:25]):
-        name_index = _header_index(values, NAME_MARKERS)
+        name_index = _product_name_index(values)
         qty_index = _header_index(values, QUANTITY_MARKERS)
         if name_index is not None and qty_index is not None:
             header_row = row_index
@@ -402,7 +414,7 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
         header = None
         indexes: dict[str, int | None] = {}
         for row_index, values in enumerate(rows[:15]):
-            name_index = _header_index(values, NAME_MARKERS)
+            name_index = _product_name_index(values)
             quantity_candidates = [index for index, value in enumerate(values) if any(marker in normalize(value).lower() for marker in QUANTITY_MARKERS)]
             qty_index = next((index for index in quantity_candidates if "шт" in normalize(values[index]).lower()), quantity_candidates[-1] if quantity_candidates else None)
             if name_index is not None and qty_index is not None:
@@ -428,7 +440,9 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
                 f"docx:{table_index}:{row_index}", value_at("name"), value_at("quantity"),
                 value_at("width"), value_at("height"), value_at("area"), " | ".join(values),
             )
-            if item and item["quantity"]:
+            if item and item["quantity"] and not re.match(r"^(?:монтаж|доставка)\b", item["name"], re.I):
+                if normalize(values[indexes["name"]]).lower().startswith("рулонная штора bnt"):
+                    item["structured"] = True
                 result.append(item)
     document_text = normalize(" ".join(
         [paragraph.text for paragraph in document.paragraphs]
@@ -641,15 +655,22 @@ def _infer_product_fields(name: str) -> dict[str, Any]:
     system = next((item for item in ("Стандарт", "Мини", "AMG", "UNI 1", "UNI 2") if item.lower() in lower), "")
     if "амг" in lower:
         system = "AMG"
+    if re.search(r"\bbnt\b|\bбнт\b", lower):
+        system = "BNT"
     opacity = "Блэкаут" if "блэкаут" in lower or "blackout" in lower or "непрозрач" in lower else "Полупрозрачная"
     split_match = re.search(r"раздел\w*\s+на\s+(\d+)", lower)
     split = int(split_match.group(1)) if split_match else 1
-    cleaned = re.sub(r"рулонные? штор\w*|стандарт|мини|amg|полупрозрач\w* ткань|непрозрач\w* ткань|способ монтаж\w*:?|на стену", " ", name, flags=re.I)
+    cleaned = re.sub(r"рулонн\w* штор\w*|стандарт|мини|amg|\bbnt\b|\bбнт\b|полупрозрач\w* ткань|непрозрач\w* ткань|способ монтаж\w*:?|на стену", " ", name, flags=re.I)
+    cleaned = cleaned.split("|", 1)[0]
     words = normalize(cleaned).split()
+    if words and words[0].lower() == "альфа" and len(words) >= 2 and re.match(r"black-?out", words[1], re.I):
+        fabric, color = "АЛЬФА BLACK-OUT", " ".join(words[2:])
+    else:
+        fabric, color = " ".join(words[:2]), " ".join(words[2:])
     return {
         "system": system,
-        "fabric": " ".join(words[:2]),
-        "color": " ".join(words[2:]),
+        "fabric": fabric,
+        "color": color,
         "opacity": opacity,
         "split_into": split,
     }
@@ -685,7 +706,7 @@ def parse_tz(path: Path, llm: LLMProvider, db: KnowledgeBase) -> list[QuoteItem]
                 continue
             if merged.get(key) in (None, "", 0):
                 merged[key] = value
-        allowed_systems = {"Стандарт", "Мини", "AMG", "UNI 1", "UNI 2", "BNT-M-44-MONO", "BNT-L-65"}
+        allowed_systems = {"Стандарт", "Мини", "AMG", "UNI 1", "UNI 2", "BNT", "BNT-M-44-MONO", "BNT-L-65"}
         if merged.get("system") not in allowed_systems:
             merged["system"] = fields["system"]
         explicit_split = re.search(r"раздел\w*\s+на\s+(\d+)", normalize(record.get("raw_text", "")).lower())

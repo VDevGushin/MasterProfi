@@ -43,6 +43,46 @@ def test_format_extractors() -> None:
     assert len(technical) >= 30
 
 
+def test_material_header_can_name_bnt_products_without_importing_installation() -> None:
+    from docx import Document
+
+    with TemporaryDirectory() as temporary:
+        path = Path(temporary) / "спецификация BNT.docx"
+        document = Document()
+        table = document.add_table(rows=1, cols=4)
+        for cell, value in zip(table.rows[0].cells, ("Материал", "Ширина", "Высота", "Кол-во")):
+            cell.text = value
+        for row in (
+            ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл", "1,450", "2,700", "14"),
+            ("Рулонная штора BNT Альфа BlackOut бежевый | цепь управления металл, усиленная труба", "2,15", "2,700", "1"),
+            ("Монтаж изделий", "", "", "15"),
+        ):
+            for cell, value in zip(table.add_row().cells, row):
+                cell.text = value
+        document.save(path)
+        records = extract_records(path)
+        assert len(records) == 2
+        assert [record["quantity"] for record in records] == [14, 1]
+        assert [record["width_m"] for record in records] == [1.45, 2.15]
+
+        class NoLLM:
+            def extract_items(self, records, _context):
+                assert records == []
+                return []
+
+        db = KnowledgeBase()
+        try:
+            items = parse_tz(path, NoLLM(), db)
+            assert [item.system for item in items] == ["BNT", "BNT"]
+            assert [item.fabric for item in items] == ["АЛЬФА BLACK-OUT", "АЛЬФА BLACK-OUT"]
+            assert all(item.color == "бежевый" for item in items)
+            priced, unresolved, invalid = price_items(items, load_agent_config(), db, logger=silent)
+            assert not priced and not invalid and len(unresolved) == 2
+            assert all("длину металлической цепи" in item.note for item in unresolved)
+        finally:
+            db.close()
+
+
 def test_structured_xlsx_inherits_product_fields_without_qwen() -> None:
     class NoLLM:
         def __init__(self) -> None:

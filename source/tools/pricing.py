@@ -500,6 +500,16 @@ def price_items(items: list[QuoteItem], config: dict[str, Any], db: KnowledgeBas
             item.note = "В локальном прайсе не найдено подтверждённое правило расчёта угловой шторы"
             unresolved.append(item)
             continue
+        if item.system == "BNT" and not item.raw.get("variant"):
+            item.note = (
+                "Уточните серию BNT M/L и длину металлической цепи; "
+                "BEN M!U34 и BEN L!U30 задают цену цепи за погонный метр"
+            )
+            if "УСИЛЕН" in normalize_key(item.name):
+                item.note += "; уточните диаметр усиленной трубы (варианты в BEN M!H24:H25, BEN L!H26:H28)"
+            item.note += ". Нужен ручной расчёт и корректировка КП"
+            unresolved.append(item)
+            continue
         accessory, accessory_source = accessory_price(price_path, item, float(config["usd_rub_rate"]))
         if accessory is not None:
             item.price_rub = accessory
