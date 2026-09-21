@@ -64,6 +64,18 @@ def _header_index(values: list[Any], markers: tuple[str, ...]) -> int | None:
     return None
 
 
+def _product_name_index(values: list[Any]) -> int | None:
+    index = _header_index(values, NAME_MARKERS)
+    if index is not None:
+        return index
+    # В коротких спецификациях «Материал» обозначает всю позицию изделия,
+    # если рядом есть только размер и количество, а не отдельное наименование.
+    material = _material_index(values)
+    if material is not None and _header_index(values, WIDTH_MARKERS) is not None and _header_index(values, HEIGHT_MARKERS) is not None:
+        return material
+    return None
+
+
 def _material_index(values: list[Any]) -> int | None:
     """Find a fabric column without confusing it with 'прозрачность материала'."""
     for index, value in enumerate(values):
@@ -95,7 +107,7 @@ def _xlsx_records(path: Path) -> list[dict[str, Any]]:
     header_row = None
     indexes: dict[str, int | None] = {}
     for row_index, values in enumerate(rows[:25]):
-        name_index = _header_index(values, NAME_MARKERS)
+        name_index = _product_name_index(values)
         qty_index = _header_index(values, QUANTITY_MARKERS)
         if name_index is not None and qty_index is not None:
             header_row = row_index
@@ -166,16 +178,248 @@ def _unique_cells(row: Any) -> list[str]:
     return values
 
 
+def _bounded_measurement(value: str) -> tuple[float | None, dict[str, Any] | None]:
+    numbers = [float(number.replace(",", ".")) for number in re.findall(r"\d+(?:[.,]\d+)?", value)]
+    if len(numbers) >= 2 and any(marker in value for marker in ("<", ">", "≤", "≥", "от", "до")):
+        minimum, maximum = numbers[0], numbers[1]
+        return round((minimum + maximum) / 2, 6), {
+            "minimum_m": minimum,
+            "maximum_m": maximum,
+            "source": normalize(value),
+        }
+    if numbers:
+        return numbers[0], None
+    return None, None
+
+
+def _ktru_docx_records(table_index: int, rows: list[list[str]]) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    header = [normalize(value).lower() for value in rows[0]]
+    required_headers = {"наименование товара", "наименование характеристики", "значение характеристики"}
+    if not required_headers.issubset(set(header)):
+        return []
+    indexes = {
+        "name": header.index("наименование товара"),
+        "characteristic": header.index("наименование характеристики"),
+        "value": header.index("значение характеристики"),
+        "quantity": next((index for index, value in enumerate(header) if "кол-во" in value or "количество" in value), None),
+    }
+    groups: dict[tuple[str, int], dict[str, Any]] = {}
+    for row_index, values in enumerate(rows[1:], 2):
+        name = normalize(values[indexes["name"]]) if indexes["name"] < len(values) else ""
+        quantity_index = indexes["quantity"]
+        quantity = _quantity(values[quantity_index]) if quantity_index is not None and quantity_index < len(values) else 0
+        if not name or not quantity:
+            continue
+        key = (name, quantity)
+        group = groups.setdefault(key, {"row": row_index, "characteristics": {}, "texts": []})
+        characteristic = normalize(values[indexes["characteristic"]]) if indexes["characteristic"] < len(values) else ""
+        characteristic_value = normalize(values[indexes["value"]]) if indexes["value"] < len(values) else ""
+        if characteristic:
+            group["characteristics"][characteristic.lower()] = characteristic_value
+        group["texts"].append(" | ".join(values))
+
+    result: list[dict[str, Any]] = []
+    for (name, quantity), group in groups.items():
+        characteristics = group["characteristics"]
+        if "портьер" not in name.lower():
+            continue
+        width, width_range = _bounded_measurement(characteristics.get("ширина полотна", ""))
+        height, height_range = _bounded_measurement(characteristics.get("высота полотна", ""))
+        panel_count = max(1, _quantity(characteristics.get("количество полотен", "1")))
+        fabric_kind = normalize(characteristics.get("вид ткани", ""))
+        blackout = bool(re.search(r"black[ -]?out|бл[эе]каут|непрозрач", fabric_kind, re.I))
+        category = "1" if blackout else "E"
+        dimension_average = {
+            key: value for key, value in (("width", width_range), ("height", height_range)) if value
+        }
+        result.append({
+            "source_ref": f"docx:{table_index}:{group['row']}",
+            "name": name,
+            "quantity": quantity,
+            "width_m": width,
+            "height_m": height,
+            "area_m2": None,
+            "system": "",
+            "fabric": "Непрозрачный материал" if blackout else "Материал без указанной коллекции",
+            "opacity": "Блэкаут" if blackout else "",
+            "variant": "portieres",
+            "panel_count": panel_count,
+            "folding_coefficient": 1.5,
+            "folding_coefficient_default": True,
+            "default_fabric_category": category,
+            "default_fabric_reason": "конкретная ткань не указана в ТЗ",
+            "dimension_average": dimension_average,
+            "characteristics": characteristics,
+            "raw_text": normalize(" ".join(group["texts"])),
+            "structured": bool(width and height),
+        })
+    return result
+
+
+def _measurement_to_metres(value: str, unit: str) -> float:
+    number = float(value.replace(",", "."))
+    normalized_unit = unit.lower()
+    if normalized_unit == "мм":
+        return number / 1000
+    if normalized_unit == "см":
+        return number / 100
+    return number
+
+
+def _text_measurement(text: str, marker: str) -> tuple[float | None, dict[str, Any] | None]:
+    range_match = re.search(
+        rf"{marker}\w*[^;\n]{{0,80}}?\bот\s*(\d+(?:[.,]\d+)?)\s*"
+        rf"(?:до|[-–—])\s*(\d+(?:[.,]\d+)?)\s*(мм|см|м)\b",
+        text,
+        re.I,
+    )
+    if range_match:
+        minimum_raw, maximum_raw, unit = range_match.groups()
+        minimum = _measurement_to_metres(minimum_raw, unit)
+        maximum = _measurement_to_metres(maximum_raw, unit)
+        return round((minimum + maximum) / 2, 6), {
+            "minimum_m": minimum,
+            "maximum_m": maximum,
+            "source": normalize(range_match.group(0)),
+        }
+    exact_match = re.search(
+        rf"{marker}\w*[^;\n]{{0,80}}?\b(\d+(?:[.,]\d+)?)\s*(мм|см|м)\b",
+        text,
+        re.I,
+    )
+    if exact_match:
+        return _measurement_to_metres(exact_match.group(1), exact_match.group(2)), None
+    return None, None
+
+
+def _default_fabric(text: str) -> tuple[str, str, str] | None:
+    lower = text.lower()
+    if re.search(r"\bне\s*прозрач\w*|\bнепрозрач\w*|\bblack[ -]?out\b|\bбл[эе]каут\w*", lower):
+        return "Непрозрачный материал", "Непрозрачная", "1"
+    if re.search(r"\bзат(?:емн|ен)\w*", lower):
+        return "Затемняющий материал", "Затемняющая", "E"
+    return None
+
+
+def _explicit_fabric(text: str) -> str:
+    for line in text.splitlines():
+        lower = line.lower()
+        if any(marker in lower for marker in ("плотност", "категори", "прозрачност", "цвет")):
+            continue
+        match = re.search(r"(?:коллекци[яи]\s+ткани|материал\s+ткани|ткань)\s*[-–—:]\s*(.+)", line, re.I)
+        if match:
+            return normalize(match.group(1)).rstrip(".;")
+    return ""
+
+
+def _text_position_records(lines: list[str], source_kind: str) -> list[dict[str, Any]]:
+    cleaned_lines = [normalize(line) for line in lines]
+    position_pattern = re.compile(r"^\s*позици[яи]\s*№?\s*(\d+)\s*[.:)]?\s*(.*)$", re.I)
+    starts = [(index, position_pattern.match(line)) for index, line in enumerate(cleaned_lines)]
+    starts = [(index, match) for index, match in starts if match]
+    if not starts:
+        return []
+
+    document_text = "\n".join(cleaned_lines)
+    available_color = "любой из имеющихся в наличии" if re.search(
+        r"цвет\w*[^\n]{0,50}(?:любой|в наличии)", document_text, re.I
+    ) else ""
+    result: list[dict[str, Any]] = []
+    for block_index, (start, marker_match) in enumerate(starts):
+        end = starts[block_index + 1][0] if block_index + 1 < len(starts) else len(cleaned_lines)
+        block_lines = [line for line in cleaned_lines[start:end] if line]
+        block = "\n".join(block_lines)
+        heading = normalize(marker_match.group(2))
+        quantity_match = re.search(r"\b(\d+)\s*(?:шт(?:ук(?:а|и)?|\.)?|единиц\w*)\b", block, re.I)
+        quantity = int(quantity_match.group(1)) if quantity_match else 0
+        if quantity_match:
+            heading = normalize(re.sub(
+                r"\s*[-–—,:;]?\s*\d+\s*(?:шт(?:ук(?:а|и)?|\.)?|единиц\w*)\.?\s*$",
+                "",
+                heading,
+                flags=re.I,
+            ))
+        width, width_range = _text_measurement(block, "ширин")
+        height, height_range = _text_measurement(block, "высот")
+        shaft_diameter, shaft_range = _text_measurement(block, r"диаметр\s+(?:вала|трубы)")
+        parsed_width, parsed_height, area = parse_dimensions(block)
+        width = width or parsed_width
+        height = height or parsed_height
+
+        lower = block.lower()
+        if "кассет" in lower or "амг" in lower:
+            system = "AMG"
+        elif "мини" in lower or "mini" in lower:
+            system = "Мини"
+        elif "стандарт" in lower:
+            system = "Стандарт"
+        else:
+            system = ""
+        explicit_fabric = _explicit_fabric(block)
+        default_fabric = None if explicit_fabric else _default_fabric(block)
+        fabric, opacity, default_category = default_fabric or ("", "", "")
+        fabric = explicit_fabric or fabric
+        raw: dict[str, Any] = {
+            "raw_text": block,
+            "structured": bool(heading and quantity and width and height and system and default_category),
+            "text_source": True,
+        }
+        if "кассет" in lower:
+            shaft_diameter_mm = round(float(shaft_diameter or 0) * 1000)
+            raw.update({
+                "cassette_required": True,
+                "cassette_size_mm": 32 if shaft_diameter_mm and shaft_diameter_mm <= 32 else 45,
+                "requested_shaft_diameter_mm": shaft_diameter_mm or None,
+            })
+            if shaft_range:
+                raw["shaft_diameter_range"] = shaft_range
+        average_dimensions = {
+            key: value
+            for key, value in (("width", width_range), ("height", height_range))
+            if value is not None
+        }
+        if average_dimensions:
+            raw["dimension_average"] = average_dimensions
+        if default_category:
+            raw["default_fabric_category"] = default_category
+            raw["default_fabric_reason"] = "материал не указан в ТЗ"
+        result.append({
+            "source_ref": f"{source_kind}:text:{start + 1}",
+            "name": heading or f"Позиция {marker_match.group(1)}",
+            "quantity": quantity,
+            "width_m": width,
+            "height_m": height,
+            "area_m2": area,
+            "system": system,
+            "fabric": fabric,
+            "color": available_color,
+            "opacity": opacity,
+            **raw,
+        })
+    return result
+
+
 def _docx_records(path: Path) -> list[dict[str, Any]]:
     from docx import Document
     document = Document(path)
     result: list[dict[str, Any]] = []
+    address = next(
+        (normalize(match.group(1)) for paragraph in document.paragraphs
+         if (match := re.match(r"\s*адрес\s*:\s*(.+)", paragraph.text, re.I))),
+        "",
+    )
     for table_index, table in enumerate(document.tables, 1):
         rows = [_unique_cells(row) for row in table.rows]
+        ktru_records = _ktru_docx_records(table_index, rows)
+        if ktru_records:
+            result.extend(ktru_records)
+            continue
         header = None
         indexes: dict[str, int | None] = {}
         for row_index, values in enumerate(rows[:15]):
-            name_index = _header_index(values, NAME_MARKERS)
+            name_index = _product_name_index(values)
             quantity_candidates = [index for index, value in enumerate(values) if any(marker in normalize(value).lower() for marker in QUANTITY_MARKERS)]
             qty_index = next((index for index in quantity_candidates if "шт" in normalize(values[index]).lower()), quantity_candidates[-1] if quantity_candidates else None)
             if name_index is not None and qty_index is not None:
@@ -201,7 +445,11 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
                 f"docx:{table_index}:{row_index}", value_at("name"), value_at("quantity"),
                 value_at("width"), value_at("height"), value_at("area"), " | ".join(values),
             )
-            if item and item["quantity"]:
+            if item and item["quantity"] and not re.match(r"^(?:монтаж|доставка)\b", item["name"], re.I):
+                if normalize(values[indexes["name"]]).lower().startswith("рулонная штора bnt"):
+                    item["structured"] = True
+                if address:
+                    item["address"] = address
                 result.append(item)
     document_text = normalize(" ".join(
         [paragraph.text for paragraph in document.paragraphs]
@@ -235,7 +483,17 @@ def _docx_records(path: Path) -> list[dict[str, Any]]:
                     "variant": "angular_unverified",
                     "hardware_color": "белая",
                 })
-    return result
+    if result:
+        return result
+    return _text_position_records([paragraph.text for paragraph in document.paragraphs], "docx")
+
+
+def _txt_records(path: Path) -> list[dict[str, Any]]:
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="cp1251")
+    return _text_position_records(text.splitlines(), "txt")
 
 
 def _pdf_records(path: Path) -> list[dict[str, Any]]:
@@ -394,6 +652,8 @@ def extract_records(path: Path) -> list[dict[str, Any]]:
         return _docx_records(path)
     if suffix == ".pdf":
         return _pdf_records(path)
+    if suffix == ".txt":
+        return _txt_records(path)
     raise ValueError(f"Неподдерживаемый формат ТЗ: {suffix}")
 
 
@@ -402,15 +662,22 @@ def _infer_product_fields(name: str) -> dict[str, Any]:
     system = next((item for item in ("Стандарт", "Мини", "AMG", "UNI 1", "UNI 2") if item.lower() in lower), "")
     if "амг" in lower:
         system = "AMG"
+    if re.search(r"\bbnt\b|\bбнт\b", lower):
+        system = "BNT"
     opacity = "Блэкаут" if "блэкаут" in lower or "blackout" in lower or "непрозрач" in lower else "Полупрозрачная"
     split_match = re.search(r"раздел\w*\s+на\s+(\d+)", lower)
     split = int(split_match.group(1)) if split_match else 1
-    cleaned = re.sub(r"рулонные? штор\w*|стандарт|мини|amg|полупрозрач\w* ткань|непрозрач\w* ткань|способ монтаж\w*:?|на стену", " ", name, flags=re.I)
+    cleaned = re.sub(r"рулонн\w* штор\w*|стандарт|мини|amg|\bbnt\b|\bбнт\b|полупрозрач\w* ткань|непрозрач\w* ткань|способ монтаж\w*:?|на стену", " ", name, flags=re.I)
+    cleaned = cleaned.split("|", 1)[0]
     words = normalize(cleaned).split()
+    if words and words[0].lower() == "альфа" and len(words) >= 2 and re.match(r"black-?out", words[1], re.I):
+        fabric, color = "АЛЬФА BLACK-OUT", " ".join(words[2:])
+    else:
+        fabric, color = " ".join(words[:2]), " ".join(words[2:])
     return {
         "system": system,
-        "fabric": " ".join(words[:2]),
-        "color": " ".join(words[2:]),
+        "fabric": fabric,
+        "color": color,
         "opacity": opacity,
         "split_into": split,
     }
@@ -446,7 +713,7 @@ def parse_tz(path: Path, llm: LLMProvider, db: KnowledgeBase) -> list[QuoteItem]
                 continue
             if merged.get(key) in (None, "", 0):
                 merged[key] = value
-        allowed_systems = {"Стандарт", "Мини", "AMG", "UNI 1", "UNI 2", "BNT-M-44-MONO", "BNT-L-65"}
+        allowed_systems = {"Стандарт", "Мини", "AMG", "UNI 1", "UNI 2", "BNT", "BNT-M-44-MONO", "BNT-L-65"}
         if merged.get("system") not in allowed_systems:
             merged["system"] = fields["system"]
         explicit_split = re.search(r"раздел\w*\s+на\s+(\d+)", normalize(record.get("raw_text", "")).lower())

@@ -26,6 +26,7 @@ _FONT_CANDIDATES: dict[str, tuple[str, str]] = {
     "darwin": ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
     "win32": (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"),
 }
+_ALTERNATIVE_COLOR = "#C65911"
 
 
 def _register_fonts() -> None:
@@ -47,23 +48,55 @@ def _money(value: int | float) -> str:
 
 
 def _description(item: QuoteItem) -> str:
+    if item.raw.get("variant") == "portieres":
+        panel_count = int(item.raw.get("panel_count") or 1)
+        coefficient = float(item.raw.get("folding_coefficient") or 1.5)
+        category = escape(str(item.category or item.raw.get("default_fabric_category") or "E"))
+        opacity = escape(item.opacity.lower() or "ткань без указанной коллекции")
+        return (
+            f"Портьеры, {panel_count} полотна<br/>"
+            f"Ткань: {opacity}, категория {category} (конкретная ткань не указана в ТЗ)<br/>"
+            f"Коэффициент складок: {str(coefficient).replace('.', ',')} (принят по умолчанию)<br/>"
+            "Раскрой по ширине изделия"
+        )
     if item.raw.get("variant") in {"bnt_m44_mono_electric", "bnt_l65_electric"}:
         return (
             f"Рулонная штора {item.system} с монтажным профилем<br/>"
             f"Электропривод 220В, радиоуправление; комплектация: белая<br/>"
             f"Ткань: {item.fabric} {item.color}, {item.opacity}"
         )
+    if item.raw.get("variant") == "bnt_classic_metal_chain":
+        reinforced = " (усиленная труба)" if "усилен" in item.name.lower() else ""
+        chain_length = float(item.raw.get("chain_length_m") or item.height_m or 0)
+        return (
+            f"Рулонная штора {escape(item.system)}{reinforced}<br/>"
+            f"Ткань: {escape(item.fabric)} {escape(item.color)}, {escape(item.opacity)}<br/>"
+            f"Ручное управление, металлическая цепь; расчётная длина {chain_length:.2f} м "
+            "(по высоте изделия)"
+        )
     if not item.system:
         text = item.name
     else:
         hardware_color = str(item.raw.get("hardware_color") or "белая")
         lines = [f"Рулонные шторы {item.system}, комплектация: {hardware_color}"]
-        if item.fabric:
+        cassette_size = item.raw.get("cassette_size_mm")
+        if cassette_size:
+            lines.append(f"Короб: кассета AMG {int(cassette_size)} мм")
+        if item.raw.get("default_fabric_category"):
+            category = escape(str(item.category or item.raw["default_fabric_category"]))
+            opacity = escape(item.opacity.lower() or "материал без указанной коллекции")
+            color = f", цвет: {escape(item.color)}" if item.color else ""
+            lines.append(f"Ткань: {opacity}, категория {category} (материал не указан в ТЗ){color}")
+        elif item.fabric:
             lines.append(f"Ткань: {item.fabric} {item.color}, {item.opacity}")
         lines.append("Ручное управление, пластиковая цепь")
         text = "<br/>".join(lines)
     if item.note.startswith("Аналог:"):
         text += "<br/>" + item.note.split(";")[0]
+    replacement = item.raw.get("customer_replacement")
+    if replacement:
+        selected = escape(str(replacement.get("replacement") or "выбранная альтернатива"))
+        text += f'<br/><font color="{_ALTERNATIVE_COLOR}"><b>«{selected}»</b></font>'
     return text
 
 
@@ -76,7 +109,10 @@ def _size(item: QuoteItem) -> tuple[str, str]:
         return "—", "шт."
     if item.area_m2 is not None and (item.width_m is None or item.height_m is None):
         return f"{float(item.area_m2):.3f}".rstrip("0").rstrip("."), "м²"
-    return f"{round(float(item.width_m or 0) * 1000)}×{round(float(item.height_m or 0) * 1000)}", "мм"
+    size = f"{round(float(item.width_m or 0) * 1000)}×{round(float(item.height_m or 0) * 1000)}"
+    if item.raw.get("dimension_average"):
+        size += '<br/><font color="#666666">(взято среднее диапазона)</font>'
+    return size, "мм"
 
 
 def _manual_item_text(item: QuoteItem) -> str:
@@ -132,6 +168,12 @@ def create_quote_pdf(
         borderPadding=6,
         spaceAfter=4 * mm,
     )
+    alternative_warning = ParagraphStyle(
+        "mp-alternative-warning",
+        parent=warning,
+        textColor=colors.HexColor(_ALTERNATIVE_COLOR),
+        borderColor=colors.HexColor(_ALTERNATIVE_COLOR),
+    )
 
     metadata = next((item.raw for item in items if item.raw.get("client") or item.raw.get("address")), {})
     client = str(metadata.get("client") or "клиент не указан в ТЗ")
@@ -173,6 +215,13 @@ def create_quote_pdf(
             "ВНИМАНИЕ: КП требует ручной корректировки. Следующие позиции не рассчитаны "
             "и не включены в итоговую сумму:<br/>" + manual_lines,
             warning,
+        ))
+    replacement_count = sum(bool(item.raw.get("customer_replacement")) for item in items)
+    if replacement_count:
+        story.append(Paragraph(
+            "ВНИМАНИЕ: В предложении есть согласованные альтернативы. "
+            "Замена указана выделенным цветом.",
+            alternative_warning,
         ))
 
     table_data: list[list[Any]] = [[
